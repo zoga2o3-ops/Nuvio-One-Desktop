@@ -1,80 +1,232 @@
 <div align="center">
 
-  <img src="https://nuvio.tv/assets/nuvio-app-logo-wordmark.webp" alt="Nuvio" width="320" />
+<img src="assets/branding/nuvio-one-desktop-banner.png" alt="Nuvio One Desktop" width="820" />
 
-  <p>
-    A free, open-source media app for Windows, macOS, and Linux.
-    <br />
-    Bring your own sources. Nuvio turns them into a library with artwork, ratings, subtitles, and your place saved on every screen.
-  </p>
+# Nuvio One Desktop
 
-  [Website](https://nuvio.tv) · [GitHub releases](https://github.com/NuvioMedia/NuvioDesktop/releases/latest) · [Support Nuvio](https://nuvio.tv/support)
+**Movies and shows, Live TV, sports, YouTube and music in one app for Windows.**
+
+[![Latest release](https://img.shields.io/github/v/release/zoga2o3-ops/Nuvio-One-Desktop?label=latest&style=for-the-badge)](https://github.com/zoga2o3-ops/Nuvio-One-Desktop/releases)
+[![Downloads](https://img.shields.io/github/downloads/zoga2o3-ops/Nuvio-One-Desktop/total?style=for-the-badge)](https://github.com/zoga2o3-ops/Nuvio-One-Desktop/releases)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](LICENSE)
+![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D4?style=for-the-badge&logo=windows&logoColor=white)
+
+[What is it](#what-is-it) · [What you get](#what-you-get) · [Install](#install) · [Getting started](#getting-started) · [Updates](#updates) · [Credits](#credits)
 
 </div>
 
-## ⚠️ Alpha Software - Slow Development - Testers Only
+---
 
-Nuvio Desktop is currently in alpha and is intended only for testers. It is under development and is not suitable for daily use.
+> **Beta software.** Expect bugs, rough edges and changes between releases. Please report what you find.
+>
+> This app **does not provide any content, playlists or streams.** You bring your own sources.
 
-Expect breaking changes with every update. Features, settings, stored data, and compatibility may change or stop working without notice. Do not rely on this build as your primary media app, and report any issues you encounter during testing.
+## What is it
 
-## Get Nuvio Desktop
+Nuvio One Desktop is a Windows app built on **Nuvio Desktop**, with four parts in one:
 
-Download the latest build from [GitHub Releases](https://github.com/NuvioMedia/NuvioDesktop/releases/latest).
+1. **[Nuvio](https://github.com/NuvioMedia/NuvioDesktop):** home, search, library, addons, collections, Trakt and Simkl, your Nuvio account, downloads and Nuvio's player.
+2. **Live TV:** M3U and Xtream sources, a guide, catch-up, recordings, multiview and On Demand, from [NuvioPlusIPTV](https://github.com/homelessbrian/NuvioPlusIPTV) by homelessbrian.
+3. **OneTube:** a YouTube section of its own, played in the same player. It is not a launcher and not a web view, and you can browse it without an account.
+4. **Music:** YouTube Music, your own music server, local files, playlists, lyrics and music videos.
 
-- Windows: MSI installer
-- macOS: DMG installer
-- Linux: DEB, RPM, Flatpak, or AppImage
+It is the desktop companion to **[Nuvio One](https://github.com/zoga2o3-ops/Nuvio-One)** for Google TV, Android TV and Fire TV, and **[Nuvio One M](https://github.com/zoga2o3-ops/Nuvio-One-M)** for Android phones and tablets.
+
+---
+
+## What you get
+
+### Nuvio core
+- Home, Search, Library and title details.
+- Addons, debrid services and collections.
+- Trakt, Simkl and MDBList.
+- Nuvio account, profiles and watch progress.
+- Continue watching.
+- Downloads.
+- Trailers.
+- TMDB artwork, ratings and metadata.
+
+### Windows desktop
+- Native Windows app, not a browser wrapper.
+- MSI installer and portable build.
+- In-app updater from GitHub releases.
+- Native mpv player.
+- Picture-in-picture.
+- Fullscreen with exit and close.
+- Subtitle styling: size, font, colours, outline, shadow and position.
+- Playback speed.
+- Audio and subtitle track selection.
+- Keyboard shortcuts.
+- 4K-aware scaling and a responsive layout.
+- Mini player.
+- Anime upscaling.
+
+### Live TV
+- M3U playlists and Xtream Codes logins.
+- XMLTV guide data, with several playlists and guides merged.
+- Channel groups, favourites, recents and search.
+- Guide grid and channel list.
+- Hide, rename, renumber and reorder channels and groups.
+- Parental PIN for groups.
+- Catch-up replay.
+- Multiview with up to four channels.
+- Recording to a local folder, including from the guide.
+- Movies and series from your provider in the Movies and Series tabs.
+- Quality badges and programme details.
+- Google Drive and Nuvio account sync of your Live TV setup.
+
+### Sports
+- Scores by day and league.
+- My Teams.
+- League tables.
+- League and team pages.
+- Game pages with scores and stats.
+- Shows which of your channels carry a game.
+- Video window on the game page.
+- Multiview.
+
+### Music
+- Home, Explore, Discover, Library, Local, Downloads and Search.
+- Playlists, liked songs and queue.
+- Synced lyrics.
+- Music videos.
+- Local music files.
+- Downloads and offline playback.
+- Navidrome and WebDAV servers.
+- Spotify playlist import.
+- Last.fm scrobbling.
+- Party mode.
+- Integrations.
+- Equalizer.
+- Background playback.
+- Its own YouTube sign-in, separate from OneTube.
+
+### OneTube
+- Home, Music, Gaming, News, Sports, Live, Subscriptions, History, Playlists, Shorts and Channels.
+- Search with suggestions.
+- Optional Google sign-in with a TV activation code.
+- Channel pages and playlists.
+- Up Next and autoplay.
+- Chapters.
+- SponsorBlock.
+- DeArrow.
+- Video quality and format selection.
+- Playback speed.
+- Captions.
+- Picture-in-picture.
+- YouTube watching stays on the OneTube page and out of Continue Watching.
+
+### Accounts and sync
+- Nuvio account, profiles and watch progress.
+- Live TV setup through Google Drive.
+- Live TV setup through the Nuvio account.
+- Trakt, Simkl and MDBList.
+- Music's own YouTube sign-in, separate from OneTube.
+
+---
+
+## Known rough edges
+
+- Beta software: Windows 10 and 11 are the only builds published here.
+- The MSI is not code-signed yet, so Windows may warn about an unknown publisher.
+- Portable builds update manually. The in-app updater uses the MSI.
+- Live TV recordings are written to a local folder. There is no SMB recording.
+- Stalker portals are not supported.
+
+---
+
+## Install
+
+Download the latest build from **[Releases](https://github.com/zoga2o3-ops/Nuvio-One-Desktop/releases)**.
+
+| Build | What it is |
+| --- | --- |
+| **MSI installer** | Recommended. Installs for all users and supports in-app updates. Windows will ask for permission. |
+| **Portable ZIP** | Extract it and run `Nuvio One.exe`. No install; updates are manual. |
+
+It runs on **Windows 10 and 11**.
+
+If Windows shows **"Unknown publisher"**, choose **More info → Run anyway** only if you trust the download.
+
+---
+
+## Getting started
+
+1. Open the app and sign in with your Nuvio account, or skip and add addons yourself.
+2. **Live TV:** open **Live TV → Add source** and add an M3U playlist or Xtream login, plus a guide if you have one.
+3. **OneTube:** open OneTube. Browsing and search work without an account; sign in with a TV activation code for subscriptions and history.
+4. **Music:** open Music, sign in to YouTube Music, connect a Navidrome or WebDAV server, or add local files.
+5. **Sports:** open Sports and pick your teams.
+6. **Updates:** open **Settings → About** and choose **Check for updates**.
+
+---
+
+## Updates
+
+New versions are published on [GitHub Releases](https://github.com/zoga2o3-ops/Nuvio-One-Desktop/releases).
+
+- The app checks for updates from **Settings → About**.
+- The MSI is the update asset. The app downloads it and runs the installer.
+- The MSI upgrade ID stays the same between releases, so updates install over the existing copy and keep your data.
+- Portable builds are manual. Install the MSI if you want in-app updates.
+
+---
 
 ## Build from source
 
-```bash
-git clone https://github.com/NuvioMedia/NuvioDesktop.git
-cd NuvioDesktop
-```
-
-### Run the app
-
-```bash
-./gradlew :composeApp:run
-```
-
-On Windows PowerShell:
+You need **JDK 21**. Building the MSI also needs **WiX Toolset 3.14**.
 
 ```powershell
+git clone https://github.com/zoga2o3-ops/Nuvio-One-Desktop.git
+cd Nuvio-One-Desktop
 .\gradlew.bat :composeApp:run
 ```
 
-### Package the app
-
-Build a release package for the current host:
-
-```bash
-./gradlew :composeApp:packageReleaseDistributionForCurrentOS
-```
-
-For platform-specific packaging:
-
-Windows PowerShell:
+Portable build:
 
 ```powershell
-.\gradlew.bat :composeApp:packageReleaseMsi --rerun-tasks
+.\gradlew.bat :composeApp:createReleaseDistributable `
+  "-Pnuvio.desktop.versionName=0.1.340" `
+  "-Pnuvio.desktop.versionCode=340"
 ```
 
-macOS:
+MSI build:
 
-```bash
-./scripts/build-macos-release-dmgs.sh --package-only
+```powershell
+.\gradlew.bat :composeApp:packageReleaseMsi `
+  "-Pnuvio.desktop.versionName=0.1.340" `
+  "-Pnuvio.desktop.versionCode=340"
 ```
 
-Linux:
+The shared app uses Kotlin Multiplatform and Compose Multiplatform.
 
-```bash
-./gradlew :composeApp:packageReleaseDeb
-```
+---
 
-The shared app is built with Kotlin Multiplatform and Compose Multiplatform.
+## Reporting bugs
 
-## License
+Please look through the [existing issues](https://github.com/zoga2o3-ops/Nuvio-One-Desktop/issues) first, then [open a new one](https://github.com/zoga2o3-ops/Nuvio-One-Desktop/issues/new). Say which Windows version you use, what you did and what happened. For OneTube or Music problems, include the video's title or link.
 
-[GNU General Public License v3.0](./LICENSE)
+Problems that also happen in Nuvio Desktop belong with [Nuvio](https://github.com/NuvioMedia/NuvioDesktop/issues).
+
+---
+
+## Credits
+
+- **Nuvio** and **Nuvio Desktop** by the NuvioMedia team, which this app is built on.
+- **NuvioPlusIPTV** by homelessbrian: the Live TV guide, Sports, recordings and On Demand.
+- **BitChord** by [kushagrasinghx](https://github.com/kushagrasinghx/BitChord) (GPLv3): the Music section and its YouTube Music engine, ported to this app.
+- **SmartTube / MediaServiceCore** by Yurii Liskov (MIT licence): the YouTube engine.
+- **SponsorBlock** by Ajay Ramachandran and its community.
+- **DeArrow** by Ajay Ramachandran and its community.
+- **mpv** and **compose-media-player** for the native player.
+- This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+This is an unofficial fork. It is **not affiliated with or endorsed by NuvioMedia, NuvioPlusIPTV, BitChord, SmartTube, SponsorBlock, DeArrow, Google, YouTube or TMDB.**
+
+---
+
+## Legal
+
+This app is a client-side player. It does not host, store or distribute any media, and it ships with no channels, playlists or content sources. Only use sources you own or are authorized to access. Nuvio's [legal and DMCA information](https://github.com/NuvioMedia/NuvioTV#legal--dmca) applies here too.
+
+Licensed under the **GNU General Public License v3.0**, like upstream Nuvio. See [LICENSE](LICENSE). If you share a build, share its source too.
