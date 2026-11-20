@@ -129,7 +129,7 @@ It is the desktop companion to **[Nuvio One](https://github.com/zoga2o3-ops/Nuvi
 
 - Beta software: Windows 10 and 11 are the only builds published here.
 - The MSI is not code-signed yet, so Windows may warn about an unknown publisher.
-- Portable builds update manually. The in-app updater uses the MSI.
+- Portable builds are not updated in place. The in-app updater installs the MSI.
 - Live TV recordings are written to a local folder. There is no SMB recording.
 - Stalker portals are not supported.
 
@@ -142,7 +142,7 @@ Download the latest build from **[Releases](https://github.com/zoga2o3-ops/Nuvio
 | Build | What it is |
 | --- | --- |
 | **MSI installer** | Recommended. Installs for all users and supports in-app updates. Windows will ask for permission. |
-| **Portable ZIP** | Extract it and run `Nuvio One.exe`. No install; updates are manual. |
+| **Portable ZIP** | Extract it and run `Nuvio One.exe`. No install; the in-app updater installs the MSI. |
 
 It runs on **Windows 10 and 11**.
 
@@ -168,7 +168,7 @@ New versions are published on [GitHub Releases](https://github.com/zoga2o3-ops/N
 - The app checks for updates from **Settings → About**.
 - The MSI is the update asset. The app downloads it and runs the installer.
 - The MSI upgrade ID stays the same between releases, so updates install over the existing copy and keep your data.
-- Portable builds are manual. Install the MSI if you want in-app updates.
+- Portable builds are not updated in place. Install the MSI if you want in-app updates.
 
 ---
 
