@@ -28,6 +28,8 @@ internal data class CuratedLeague(
     val badgeUrl: String? = null,
     val espnPath: String? = null,
     val searchTerms: List<String> = emptyList(),
+    /** Extra ESPN scoreboard query (for example `&groups=80` for college football). */
+    val espnQuery: String = "",
 )
 
 internal data class SportsLeague(

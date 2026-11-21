@@ -748,13 +748,14 @@ private fun HubPane(
     }
 
     val pinNames = pins.map { it.name.lowercase(Locale.US) }.toSet()
+    fun matchesPins(event: SportsEvent): Boolean {
+        val home = event.homeTeam?.lowercase(Locale.US)
+        val away = event.awayTeam?.lowercase(Locale.US)
+        return (home != null && home in pinNames) || (away != null && away in pinNames)
+    }
     val now = rememberNow()
     val scoped = if (chip == "my") {
-        events.filter { event ->
-            val home = event.homeTeam?.lowercase(Locale.US)
-            val away = event.awayTeam?.lowercase(Locale.US)
-            (home != null && home in pinNames) || (away != null && away in pinNames)
-        }
+        events.filter(::matchesPins)
     } else {
         events
     }
@@ -763,7 +764,8 @@ private fun HubPane(
         .sortedBy { it.startEpochMs ?: Long.MAX_VALUE }
     val finished = scoped.filter { it.isFinished }
         .sortedByDescending { it.startEpochMs ?: 0L }
-    val week = weekEvents.filter { !it.isFinished }.sortedBy { it.startEpochMs ?: Long.MAX_VALUE }
+    val weekSource = if (chip == "my") weekEvents.filter(::matchesPins) else weekEvents
+    val week = weekSource.filter { !it.isFinished }.sortedBy { it.startEpochMs ?: Long.MAX_VALUE }
     val spotlight = live.firstOrNull() ?: upcoming.firstOrNull() ?: finished.firstOrNull()
     val dayFormat = DateTimeFormatter.ofPattern("EEE d", Locale.getDefault())
 

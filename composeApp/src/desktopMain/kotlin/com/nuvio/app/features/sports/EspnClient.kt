@@ -27,7 +27,7 @@ internal object EspnClient {
 
     suspend fun scoreboard(league: CuratedLeague): List<SportsEvent> {
         val path = league.espnPath ?: return emptyList()
-        val url = "$BASE_URL/$path/scoreboard"
+        val url = "$BASE_URL/$path/scoreboard${scoreboardQuery(league)}"
 
         SportsCache.get(url, CACHE_TTL_MS)?.let { cached ->
             return runCatching { parse(cached, league) }.getOrDefault(emptyList())
@@ -42,7 +42,7 @@ internal object EspnClient {
     suspend fun scoreboardForDate(league: CuratedLeague, date: LocalDate): List<SportsEvent> {
         val path = league.espnPath ?: return emptyList()
         val day = date.format(DateTimeFormatter.BASIC_ISO_DATE)
-        val url = "$BASE_URL/$path/scoreboard?dates=$day"
+        val url = "$BASE_URL/$path/scoreboard${scoreboardQuery(league, "dates=$day")}"
         val body = SportsCache.get(url, CACHE_TTL_MS)
             ?: withContext(Dispatchers.IO) { fetch(url) }.also { SportsCache.put(url, it) }
         return parse(body, league)
@@ -52,10 +52,18 @@ internal object EspnClient {
     suspend fun monthScoreboard(league: CuratedLeague, month: YearMonth): List<SportsEvent> {
         val path = league.espnPath ?: return emptyList()
         val key = month.format(DateTimeFormatter.ofPattern("yyyyMM"))
-        val url = "$BASE_URL/$path/scoreboard?dates=$key"
+        val url = "$BASE_URL/$path/scoreboard${scoreboardQuery(league, "dates=$key")}"
         val body = SportsCache.get(url, MONTH_TTL_MS)
             ?: withContext(Dispatchers.IO) { fetch(url) }.also { SportsCache.put(url, it) }
         return parse(body, league)
+    }
+
+    private fun scoreboardQuery(league: CuratedLeague, date: String? = null): String {
+        val params = buildList {
+            if (!date.isNullOrBlank()) add(date)
+            league.espnQuery.removePrefix("&").takeIf { it.isNotBlank() }?.let(::add)
+        }
+        return if (params.isEmpty()) "" else "?" + params.joinToString("&")
     }
 
     /** Table for an ESPN league. */

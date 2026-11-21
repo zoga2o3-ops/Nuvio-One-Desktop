@@ -332,9 +332,16 @@ internal object SportsRepository {
         val leagues = SportsCatalog.leaguesForSport(sport).filter { it.espnPath != null }
         leagues.map { league ->
             async {
-                val shared = runCatching {
-                    SportsDataClient.espnScoreboard(league.espnPath!!, day)
-                }.getOrNull()
+                // College leagues carry an extra group filter (all FBS / Division I).
+                // The shared cache files don't know about it, so read ESPN directly
+                // for those leagues and keep the shared cache for the rest.
+                val shared = if (league.espnQuery.isBlank()) {
+                    runCatching {
+                        SportsDataClient.espnScoreboard(league.espnPath!!, day)
+                    }.getOrNull()
+                } else {
+                    null
+                }
                 if (shared != null) {
                     EspnClient.parseScoreboard(shared, league)
                 } else {
