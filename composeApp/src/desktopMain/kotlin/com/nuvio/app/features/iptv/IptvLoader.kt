@@ -49,6 +49,7 @@ internal object IptvLoader {
         val movies: List<VodItem>,
         val epgUrls: List<String>,
         val errors: List<String>,
+        val programs: Map<String, List<EpgProgram>> = emptyMap(),
     )
 
     suspend fun load(
@@ -228,6 +229,9 @@ internal object IptvLoader {
             val jobs = synchronized(guideJobs) { guideJobs.entries.toList() }
             val epgById = LinkedHashMap<String, List<EpgProgram>>()
             val idsByName = LinkedHashMap<String, String>()
+            results.forEach { r ->
+                r?.programs?.forEach { (id, programs) -> epgById[id] = programs }
+            }
             jobs.forEachIndexed { index, (_, job) ->
                 onProgress(
                     IptvLoadProgress(
@@ -281,6 +285,9 @@ internal object IptvLoader {
         vodBudget: java.util.concurrent.atomic.AtomicInteger,
         onFraction: (Float) -> Unit,
     ): SourceResult {
+        if (source.kind.equals("stalker", true)) {
+            return loadStalkerSource(source, onFraction)
+        }
         val playlistUrl = try {
             if (source.kind == "xtream") xtreamUrl(source, "get.php", "type=m3u_plus&output=ts") else source.url
         } catch (e: Exception) {
@@ -357,6 +364,80 @@ internal object IptvLoader {
             emptyList(),
             listOf("${source.name}: ${safeError(lastError ?: IOException("Playlist download failed"))}"),
         )
+    }
+
+    /**
+     * A Stalker / Ministra portal: the channel list and guide come from the portal itself; the saved
+     * channel URL is a `stalker://` pseudo link and is resolved to a temporary stream just before playback.
+     */
+    private suspend fun loadStalkerSource(
+        source: IptvSource,
+        onFraction: (Float) -> Unit,
+    ): SourceResult {
+        if (!StalkerClient.isValidMac(source.username)) {
+            return SourceResult(
+                emptyList(), emptyList(), emptyList(),
+                listOf("${source.name}: enter a valid MAC address for the portal."),
+            )
+        }
+        return runCatching {
+            onFraction(0.05f)
+            val client = StalkerClient(source.url, source.username, StalkerLinks.http)
+            val genres = runCatching { client.genres() }.getOrDefault(emptyMap())
+            onFraction(0.15f)
+            val channels = client.channels()
+            onFraction(0.55f)
+            val guide = client.guide(24)
+            onFraction(0.9f)
+
+            val live = channels.map { ch ->
+                LiveChannel(
+                    key = source.id + ":" + stableId("stalker|${ch.id}"),
+                    sourceId = source.id,
+                    sourceName = source.name,
+                    name = ch.name,
+                    tvgId = StalkerClient.tvgId(ch),
+                    tvgName = ch.name,
+                    logo = ch.logo,
+                    group = genres[ch.genreId]?.ifBlank { null } ?: "Stalker",
+                    number = ch.number,
+                    url = StalkerClient.channelUrl(source.id, ch),
+                    headers = emptyMap(),
+                    catchup = null,
+                    drm = null,
+                )
+            }
+            val programs = buildMap<String, List<EpgProgram>> {
+                channels.forEach { ch ->
+                    val list = guide[ch.id].orEmpty().map {
+                        EpgProgram(
+                            startMs = it.startSec * 1000,
+                            stopMs = it.stopSec * 1000,
+                            title = it.title,
+                            description = it.description,
+                        )
+                    }
+                    if (list.isNotEmpty()) put(StalkerClient.tvgId(ch), list)
+                }
+            }
+            onFraction(1f)
+            SourceResult(
+                channels = live,
+                movies = emptyList(),
+                epgUrls = emptyList(),
+                errors = if (live.isEmpty()) {
+                    listOf("${source.name}: the portal returned no channels.")
+                } else {
+                    emptyList()
+                },
+                programs = programs,
+            )
+        }.getOrElse { e ->
+            SourceResult(
+                emptyList(), emptyList(), emptyList(),
+                listOf("${source.name}: ${safeError(e as? Exception ?: Exception(e))}"),
+            )
+        }
     }
 
     /**
@@ -471,7 +552,7 @@ internal object IptvLoader {
     }
 
     private fun xtreamUrl(source: IptvSource, endpoint: String, extra: String = ""): String {
-        val base = source.url.trim().trimEnd('/')
+        val base = cleanXtreamServer(source.url)
         require(base.startsWith("http://") || base.startsWith("https://")) { "Xtream server must be HTTP(S)" }
         fun encoded(value: String) = URLEncoder.encode(value, StandardCharsets.UTF_8)
         val query = "username=${encoded(source.username)}&password=${encoded(source.password)}"

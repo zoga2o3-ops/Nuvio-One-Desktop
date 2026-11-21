@@ -490,12 +490,37 @@ internal fun IptvDesktopScreen(
     }
 
     fun chooseTile(index: Int, target: PlaybackTarget?) {
+        if (target != null && StalkerLinks.isStalker(target.url)) {
+            scope.launch {
+                val resolved = StalkerLinks.resolveOnIo(target.url)
+                if (!StalkerLinks.isStalker(resolved)) {
+                    multiview = multiview?.toMutableList()?.also { it[index] = target.copy(url = resolved) }
+                }
+            }
+            return
+        }
         multiview = multiview?.toMutableList()?.also { it[index] = target }
     }
 
+    fun openPlayback(target: PlaybackTarget) {
+        if (!StalkerLinks.isStalker(target.url)) {
+            playing = target
+            playbackError = null
+            return
+        }
+        scope.launch {
+            val resolved = StalkerLinks.resolveOnIo(target.url)
+            if (StalkerLinks.isStalker(resolved)) {
+                playbackError = "Couldn't get a stream link from the portal."
+            } else {
+                playing = target.copy(url = resolved)
+                playbackError = null
+            }
+        }
+    }
+
     fun play(channel: LiveChannel) {
-        playing = PlaybackTarget(channel.url, channel.headers, channel.name)
-        playbackError = null
+        openPlayback(PlaybackTarget(channel.url, channel.headers, channel.name))
         // The "Open channels full screen" switch: go full screen as the channel starts.
         if (settings.openChannelsFullScreen && !isDesktopAppFullscreen()) toggleFullscreenAction()
         // Settings → Recent group: newest first, last 30 channels.
@@ -518,8 +543,7 @@ internal fun IptvDesktopScreen(
         val catchup = channel.catchup ?: return
         val url = CatchupUrlBuilder.build(channel.url, catchup, program.startMs, program.stopMs)
             ?: channel.url
-        playing = PlaybackTarget(url, channel.headers, "${channel.name} (from start)")
-        playbackError = null
+        openPlayback(PlaybackTarget(url, channel.headers, "${channel.name} (from start)"))
     }
 
     fun goTab(tab: String) {
@@ -860,7 +884,7 @@ internal fun IptvDesktopScreen(
                             item {
                                 Text(
                                     if (sources.isEmpty()) {
-                                        "Add an M3U playlist or Xtream account to see your channels and guide."
+                                        "Add an M3U playlist, Xtream account or Stalker portal to see your channels and guide."
                                     } else {
                                         "Nothing matches this filter."
                                     },
@@ -1060,7 +1084,19 @@ internal fun IptvDesktopScreen(
                                     IptvRecorder.stop()
                                     recordings = IptvRecorder.recordings()
                                 } else {
-                                    IptvRecorder.start(selected.name, selected.url, selected.headers)
+                                    val channel = selected
+                                    if (channel != null) {
+                                        scope.launch {
+                                            val url = if (StalkerLinks.isStalker(channel.url)) {
+                                                StalkerLinks.resolveOnIo(channel.url)
+                                            } else {
+                                                channel.url
+                                            }
+                                            if (!StalkerLinks.isStalker(url)) {
+                                                IptvRecorder.start(channel.name, url, channel.headers)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -2177,7 +2213,11 @@ private fun SourcesDialog(
                             Column(Modifier.weight(1f)) {
                                 Text(source.name, fontSize = 13.sp, maxLines = 1)
                                 Text(
-                                    if (source.kind == "xtream") "Xtream · ${source.url}" else source.url,
+                                    when (source.kind) {
+                                        "xtream" -> "Xtream · ${source.url}"
+                                        "stalker" -> "Stalker · ${source.url}"
+                                        else -> source.url
+                                    },
                                     fontSize = 10.5.sp,
                                     color = IptvDim,
                                     maxLines = 1,
@@ -2208,8 +2248,19 @@ private fun AddSourceDialog(
     var epgUrl by remember(existing?.id) { mutableStateOf(existing?.epgUrl.orEmpty()) }
     var username by remember(existing?.id) { mutableStateOf(existing?.username.orEmpty()) }
     var password by remember(existing?.id) { mutableStateOf(existing?.password.orEmpty()) }
-    val valid = url.startsWith("https://") || url.startsWith("http://") ||
-        (kind == "m3u" && url.startsWith("file://"))
+    val isXtream = kind.equals("xtream", true)
+    val isStalker = kind.equals("stalker", true)
+    val macValid = StalkerClient.isValidMac(username)
+    val xtreamLinkCredentials = if (isXtream) xtreamCredentialsFromLink(url) else null
+    val xtreamUser = username.ifBlank { xtreamLinkCredentials?.first.orEmpty() }
+    val xtreamPass = password.ifBlank { xtreamLinkCredentials?.second.orEmpty() }
+    val valid = when {
+        isXtream -> cleanXtreamServer(url).startsWith("http") &&
+            xtreamUser.isNotBlank() && xtreamPass.isNotBlank()
+        isStalker -> cleanXtreamServer(url).isNotBlank() && macValid
+        else -> url.startsWith("https://") || url.startsWith("http://") ||
+            (kind == "m3u" && url.startsWith("file://"))
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2222,6 +2273,7 @@ private fun AddSourceDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IptvChip("M3U playlist", kind == "m3u") { kind = "m3u" }
                     IptvChip("Xtream", kind == "xtream") { kind = "xtream" }
+                    IptvChip("Stalker", kind == "stalker") { kind = "stalker" }
                 }
                 OutlinedTextField(
                     name,
@@ -2233,7 +2285,15 @@ private fun AddSourceDialog(
                 OutlinedTextField(
                     url,
                     { url = it },
-                    label = { Text(if (kind == "xtream") "Server URL" else "Playlist URL") },
+                    label = {
+                        Text(
+                            when {
+                                kind == "xtream" -> "Server URL"
+                                kind == "stalker" -> "Portal URL"
+                                else -> "Playlist URL"
+                            },
+                        )
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -2254,13 +2314,37 @@ private fun AddSourceDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                OutlinedTextField(
-                    epgUrl,
-                    { epgUrl = it },
-                    label = { Text("XMLTV guide URL (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (kind == "stalker") {
+                    OutlinedTextField(
+                        username,
+                        { username = it },
+                        label = { Text("MAC address") },
+                        placeholder = { Text("00:1A:79:AB:CD:EF") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (kind != "stalker") {
+                    OutlinedTextField(
+                        epgUrl,
+                        { epgUrl = it },
+                        label = { Text("XMLTV guide URL (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (kind == "stalker") {
+                    Text(
+                        "The portal's own guide is used. The MAC address must be the one the provider gave you.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (kind == "xtream") {
+                    Text(
+                        "Enter the server as host:port or http://host:port. A pasted get.php?username=…&password=… link fills the login automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 Text(
                     "Sources are saved privately on this computer. Add only streams you can access.",
                     style = MaterialTheme.typography.bodySmall,
@@ -2273,16 +2357,24 @@ private fun AddSourceDialog(
                     onAdd(
                         IptvSource(
                             existing?.id ?: UUID.randomUUID().toString(),
-                            name.ifBlank { "Playlist" },
-                            url.trim(),
-                            epgUrl.trim(),
+                            name.ifBlank { if (isStalker) "Stalker portal" else if (isXtream) "Xtream" else "Playlist" },
+                            when {
+                                isXtream -> cleanXtreamServer(url)
+                                isStalker -> url.trim()
+                                else -> url.trim()
+                            },
+                            if (isStalker) "" else epgUrl.trim(),
                             kind,
-                            username.trim(),
-                            password,
+                            when {
+                                isXtream -> xtreamUser.trim()
+                                isStalker -> StalkerClient.normalizeMac(username)
+                                else -> username.trim()
+                            },
+                            if (isStalker) "" else if (isXtream) xtreamPass else password,
                         ),
                     )
                 },
-                enabled = valid && (kind != "xtream" || (username.isNotBlank() && password.isNotBlank())),
+                enabled = valid,
             ) { Text(if (existing != null) "Save" else "Add") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },

@@ -87,8 +87,9 @@ internal object IptvSourceStore {
         } finally {
             Files.deleteIfExists(temporary)
         }
-        // The playlist behind the sources changed: the next entry reloads.
+            // The playlist behind the sources changed: the next entry reloads.
         IptvSession.invalidate()
+        StalkerLinks.configure(sources)
         // Removed here (by you): Live TV sync takes them off your other devices too.
         val now = sources.associateBy { it.id }
         val removed = HashSet<String>()

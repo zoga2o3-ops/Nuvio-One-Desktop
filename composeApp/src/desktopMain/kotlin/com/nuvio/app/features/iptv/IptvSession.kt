@@ -51,6 +51,7 @@ internal object IptvSession {
         sources: List<IptvSource>,
         maxAgeMs: Long = DEFAULT_MAX_AGE_MS,
     ) {
+        StalkerLinks.configure(sources)
         if (sources.isEmpty()) {
             clear()
             return
@@ -80,6 +81,7 @@ internal object IptvSession {
     }
 
     fun refresh(sources: List<IptvSource>) {
+        StalkerLinks.configure(sources)
         if (sources.isEmpty()) {
             clear()
             return

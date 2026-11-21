@@ -26,7 +26,7 @@
 Nuvio One Desktop is a Windows app built on **Nuvio Desktop**, with four parts in one:
 
 1. **[Nuvio](https://github.com/NuvioMedia/NuvioDesktop):** home, search, library, addons, collections, Trakt and Simkl, your Nuvio account, downloads and Nuvio's player.
-2. **Live TV:** M3U and Xtream sources, a guide, catch-up, recordings, multiview and On Demand, from [NuvioPlusIPTV](https://github.com/homelessbrian/NuvioPlusIPTV) by homelessbrian.
+2. **Live TV:** M3U, Xtream and Stalker portal sources, a guide, catch-up, recordings, multiview and On Demand, from [NuvioPlusIPTV](https://github.com/homelessbrian/NuvioPlusIPTV) by homelessbrian.
 3. **OneTube:** a YouTube section of its own, played in the same player. It is not a launcher and not a web view, and you can browse it without an account.
 4. **Music:** YouTube Music, your own music server, local files, playlists, lyrics and music videos.
 
@@ -63,8 +63,11 @@ It is the desktop companion to **[Nuvio One](https://github.com/zoga2o3-ops/Nuvi
 - Send a debug report from **Settings → About** (redacted, same support channel as the TV and mobile apps).
 
 ### Live TV
-- M3U playlists and Xtream Codes logins.
+- M3U playlists, Xtream Codes logins and Stalker (Ministra) portals.
+- Xtream server addresses accept `host:port` or a pasted `get.php?username=…&password=…` link; the login is filled from the link.
+- Stalker portals use the MAC address your provider supplied and load the portal's own guide.
 - XMLTV guide data, with several playlists and guides merged.
+- Imported playlists are listed in **Settings → Live TV → Sources**.
 - Channel groups, favourites, recents and search.
 - Guide grid and channel list.
 - Hide, rename, renumber and reorder channels and groups.
@@ -138,7 +141,7 @@ It is the desktop companion to **[Nuvio One](https://github.com/zoga2o3-ops/Nuvi
 - Live TV recordings are written to a local folder. The SMB share is for recordings made by the TV/phone, plus Combine and MP4 exports.
 - One SMB share at a time; its password is encrypted with Windows DPAPI.
 - MP4 export needs ffmpeg on PATH or a path set in **Recordings → Share & export**.
-- Stalker portals are not supported.
+- Stalker portals are supported; one portal per source, with its own MAC address.
 
 ---
 
@@ -160,7 +163,7 @@ If Windows shows **"Unknown publisher"**, choose **More info → Run anyway** on
 ## Getting started
 
 1. Open the app and sign in with your Nuvio account, or skip and add addons yourself.
-2. **Live TV:** open **Live TV → Add source** and add an M3U playlist or Xtream login, plus a guide if you have one.
+2. **Live TV:** open **Live TV → Add source** and add an M3U playlist, Xtream login or Stalker portal, plus a guide if you have one.
 3. **OneTube:** open OneTube. Browsing and search work without an account; sign in with a TV activation code for subscriptions and history.
 4. **Music:** open Music, sign in to YouTube Music, connect a Navidrome or WebDAV server, or add local files.
 5. **Sports:** open Sports and pick your teams.

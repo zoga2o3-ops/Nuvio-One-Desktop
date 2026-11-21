@@ -583,8 +583,13 @@ private fun GuideLivePreview(channel: LiveChannel, modifier: Modifier) {
     }
 
     LaunchedEffect(controller, channel.url) {
+        val sourceUrl = if (StalkerLinks.isStalker(channel.url)) {
+            StalkerLinks.resolveOnIo(channel.url)
+        } else {
+            channel.url
+        }
         controller.attach(
-            sourceUrl = channel.url,
+            sourceUrl = sourceUrl,
             sourceHeaders = channel.headers,
             sourceAudioUrl = null,
             playWhenReady = true,

@@ -186,16 +186,37 @@ internal object LiveTvSyncLocal {
             val current = IptvSourceStore.load().associateBy { it.id }
             val sources = playlists.values.filter(::loadableHere).mapNotNull { o ->
                 val id = o.str("id") ?: return@mapNotNull null
-                val xtream = o.str("xtreamServer").orEmpty()
+                val rawXtream = o.str("xtreamServer").orEmpty()
+                val xtream = cleanXtreamServer(rawXtream)
+                val xtreamCredentials = xtreamCredentialsFromLink(rawXtream)
+                val stalkerPortal = o.str("stalkerPortal").orEmpty()
+                val stalkerMac = o.str("stalkerMac").orEmpty()
                 val guide = epgs[sourceGuideId(id)]?.takeIf { it.bool("enabled", true) }?.str("url").orEmpty()
                 IptvSource(
                     id = id,
                     name = o.str("name").orEmpty().ifBlank { current[id]?.name ?: "Playlist" },
-                    url = if (xtream.isNotBlank()) xtream else o.str("url").orEmpty(),
-                    epgUrl = guide,
-                    kind = if (xtream.isNotBlank()) "xtream" else "m3u",
-                    username = if (xtream.isNotBlank()) o.str("xtreamUsername").orEmpty() else "",
-                    password = if (xtream.isNotBlank()) o.str("xtreamPassword").orEmpty() else "",
+                    url = when {
+                        xtream.isNotBlank() -> xtream
+                        stalkerPortal.isNotBlank() -> stalkerPortal
+                        else -> o.str("url").orEmpty()
+                    },
+                    epgUrl = if (stalkerPortal.isNotBlank()) "" else guide,
+                    kind = when {
+                        xtream.isNotBlank() -> "xtream"
+                        stalkerPortal.isNotBlank() -> "stalker"
+                        else -> "m3u"
+                    },
+                    username = when {
+                        xtream.isNotBlank() -> o.str("xtreamUsername").orEmpty()
+                            .ifBlank { xtreamCredentials?.first.orEmpty() }
+                        stalkerPortal.isNotBlank() -> stalkerMac
+                        else -> ""
+                    },
+                    password = if (xtream.isNotBlank()) {
+                        o.str("xtreamPassword").orEmpty().ifBlank { xtreamCredentials?.second.orEmpty() }
+                    } else {
+                        ""
+                    },
                 )
             }.filter { it.url.isNotBlank() }
             if (sources != IptvSourceStore.load()) {
@@ -334,18 +355,33 @@ internal object LiveTvSyncLocal {
     private fun playlistEntry(s: IptvSource, shared: JsonObject?): JsonObject {
         val out = LinkedHashMap<String, JsonElement>(shared ?: DEFAULT_PLAYLIST)
         val xtream = s.kind.equals("xtream", true)
+        val stalker = s.kind.equals("stalker", true)
         out["id"] = JsonPrimitive(s.id)
         out["name"] = JsonPrimitive(s.name)
         if (xtream) {
+            out["sourceType"] = JsonPrimitive("xtream")
             out["xtreamServer"] = JsonPrimitive(s.url)
             out["xtreamUsername"] = JsonPrimitive(s.username)
             out["xtreamPassword"] = JsonPrimitive(s.password)
+            out["stalkerPortal"] = JsonPrimitive("")
+            out["stalkerMac"] = JsonPrimitive("")
             if (shared == null) out["url"] = JsonPrimitive("")
-        } else {
+        } else if (stalker) {
+            out["sourceType"] = JsonPrimitive("stalker")
+            out["stalkerPortal"] = JsonPrimitive(s.url)
+            out["stalkerMac"] = JsonPrimitive(s.username)
             out["url"] = JsonPrimitive(s.url)
             out["xtreamServer"] = JsonPrimitive("")
             out["xtreamUsername"] = JsonPrimitive("")
             out["xtreamPassword"] = JsonPrimitive("")
+        } else {
+            out["sourceType"] = JsonPrimitive("m3u")
+            out["url"] = JsonPrimitive(s.url)
+            out["xtreamServer"] = JsonPrimitive("")
+            out["xtreamUsername"] = JsonPrimitive("")
+            out["xtreamPassword"] = JsonPrimitive("")
+            out["stalkerPortal"] = JsonPrimitive("")
+            out["stalkerMac"] = JsonPrimitive("")
         }
         out["enabled"] = JsonPrimitive(true)
         return JsonObject(out)
@@ -408,12 +444,18 @@ internal object LiveTvSyncLocal {
         return if (same) old else fresh
     }
 
-    /** A TV playlist this computer can load: switched on, and an M3U address or an Xtream login. */
+    /** A TV playlist this computer can load: switched on, an M3U address, an Xtream login or a Stalker portal. */
     private fun loadableHere(o: JsonObject): Boolean {
         if (!o.bool("enabled", true)) return false
         val type = o.str("sourceType").orEmpty()
-        if (type.isNotBlank() && !type.equals("m3u", true) && !type.equals("xtream", true)) return false
-        return o.str("url").orEmpty().isNotBlank() || o.str("xtreamServer").orEmpty().isNotBlank()
+        if (type.isNotBlank() && !type.equals("m3u", true) && !type.equals("xtream", true) &&
+            !type.equals("stalker", true)
+        ) {
+            return false
+        }
+        return o.str("url").orEmpty().isNotBlank() ||
+            o.str("xtreamServer").orEmpty().isNotBlank() ||
+            o.str("stalkerPortal").orEmpty().isNotBlank()
     }
 
     private fun JsonObject.bool(key: String, default: Boolean): Boolean =

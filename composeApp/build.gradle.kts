@@ -1264,6 +1264,8 @@ kotlin {
                 implementation(libs.ktor.client.cio)
                 implementation(libs.ktor.client.okhttp)
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
+                // Stalker / Ministra portals answer with JSON objects.
+                implementation("org.json:json:20240303")
                 // Reading the Live TV recordings other Nuvio apps save on an SMB share.
                 implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
                 // HTML parsing for the Genius lyrics fallback (BitChord's Genius.kt).

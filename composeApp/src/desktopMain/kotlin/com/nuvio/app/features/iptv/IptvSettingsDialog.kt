@@ -525,6 +525,42 @@ private fun SetupTab(
         }
     }
 
+    val importedSources = IptvSourceStore.load()
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (importedSources.isEmpty()) {
+            Text("No playlists imported yet.", fontSize = 11.sp, color = IptvDim)
+        } else {
+            Text(
+                "Imported playlists (${importedSources.size})",
+                fontSize = 10.5.sp,
+                color = IptvDim,
+            )
+            importedSources.forEach { source ->
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(IptvPanel)
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(source.name, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            sourceTypeLabel(source),
+                            fontSize = 10.5.sp,
+                            color = IptvDim,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     if (editingChannels) {
         ChannelOrderDialog(
             channelsByGroup = channelsByGroup,
@@ -1343,4 +1379,14 @@ internal fun LiveTvCloudPromptHost() {
             }
         }
     }
+}
+
+private fun sourceTypeLabel(source: IptvSource): String {
+    val kind = when (source.kind.lowercase()) {
+        "xtream" -> "Xtream"
+        "stalker" -> "Stalker"
+        else -> "M3U"
+    }
+    val host = source.url.substringAfter("://").substringBefore('/').ifBlank { source.url }
+    return "$kind · $host"
 }
