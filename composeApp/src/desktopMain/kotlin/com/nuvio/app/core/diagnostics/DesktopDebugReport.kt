@@ -107,8 +107,10 @@ internal object DesktopDebugReport {
 
         section("LIVE TV")
         appendLine("sources=${runCatching { IptvSourceStore.load().size }.getOrDefault(0)}")
+        appendLine("sourceStore=${runCatching { IptvSourceStore.diagnostics() }.getOrElse { "unavailable" }}")
         appendLine("channels=${runCatching { IptvSession.guide.channels.size }.getOrDefault(0)}")
         appendLine("programs=${runCatching { IptvSession.guide.programs.values.sumOf { it.size } }.getOrDefault(0)}")
+        appendLine("lastLoadError=${runCatching { IptvSession.guide.errors.firstOrNull() }.getOrNull() ?: "none"}")
         appendLine("localRecordings=${runCatching { IptvRecorder.recordings().size }.getOrDefault(0)}")
         appendLine("smbConfigured=${runCatching { IptvSmbStore.load() != null }.getOrDefault(false)}")
 

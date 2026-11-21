@@ -289,7 +289,11 @@ internal object IptvLoader {
             return loadStalkerSource(source, onFraction)
         }
         val playlistUrl = try {
-            if (source.kind == "xtream") xtreamUrl(source, "get.php", "type=m3u_plus&output=ts") else source.url
+            if (source.kind == "xtream") {
+                xtreamUrl(source, "get.php", "type=m3u_plus&output=ts")
+            } else {
+                normalizePlaylistUrl(source.url)
+            }
         } catch (e: Exception) {
             return SourceResult(emptyList(), emptyList(), emptyList(), listOf("${source.name}: ${safeError(e)}"))
         }
@@ -483,7 +487,7 @@ internal object IptvLoader {
     }
 
     private fun open(rawUrl: String, onLength: (Long) -> Unit = {}): InputStream {
-        val uri = URI.create(rawUrl.trim())
+        val uri = URI.create(normalizePlaylistUrl(rawUrl))
         require(uri.scheme?.lowercase() in setOf("http", "https", "file")) { "Use an HTTP(S) or file URL" }
         if (uri.scheme.equals("file", ignoreCase = true)) {
             runCatching { Files.size(Path.of(uri)) }.getOrNull()?.let(onLength)

@@ -11,6 +11,7 @@ import com.nuvio.app.features.iptv.IptvSettingsStore
 import com.nuvio.app.features.iptv.IptvSource
 import com.nuvio.app.features.iptv.IptvSourceStore
 import com.nuvio.app.features.iptv.cleanXtreamServer
+import com.nuvio.app.features.iptv.normalizePlaylistUrl
 import com.nuvio.app.features.iptv.sync.LiveTvMerge.str
 import com.nuvio.app.features.iptv.xtreamCredentialsFromLink
 import java.nio.file.Files
@@ -200,7 +201,7 @@ internal object LiveTvSyncLocal {
                     url = when {
                         xtream.isNotBlank() -> xtream
                         stalkerPortal.isNotBlank() -> stalkerPortal
-                        else -> o.str("url").orEmpty()
+                        else -> normalizePlaylistUrl(o.str("url").orEmpty())
                     },
                     epgUrl = if (stalkerPortal.isNotBlank()) "" else guide,
                     kind = when {
@@ -358,18 +359,23 @@ internal object LiveTvSyncLocal {
         val out = LinkedHashMap<String, JsonElement>(shared ?: DEFAULT_PLAYLIST)
         val xtream = s.kind.equals("xtream", true)
         val stalker = s.kind.equals("stalker", true)
+        // The extra desktop keys are only added when the shared entry already has them (or the
+        // source is new): a TV's own copy must otherwise come back byte-for-byte unchanged.
+        fun putDesktop(key: String, value: JsonElement) {
+            if (shared == null || shared.containsKey(key)) out[key] = value
+        }
         out["id"] = JsonPrimitive(s.id)
         out["name"] = JsonPrimitive(s.name)
         if (xtream) {
-            out["sourceType"] = JsonPrimitive("xtream")
+            putDesktop("sourceType", JsonPrimitive("xtream"))
             out["xtreamServer"] = JsonPrimitive(s.url)
             out["xtreamUsername"] = JsonPrimitive(s.username)
             out["xtreamPassword"] = JsonPrimitive(s.password)
-            out["stalkerPortal"] = JsonPrimitive("")
-            out["stalkerMac"] = JsonPrimitive("")
+            putDesktop("stalkerPortal", JsonPrimitive(""))
+            putDesktop("stalkerMac", JsonPrimitive(""))
             if (shared == null) out["url"] = JsonPrimitive("")
         } else if (stalker) {
-            out["sourceType"] = JsonPrimitive("stalker")
+            putDesktop("sourceType", JsonPrimitive("stalker"))
             out["stalkerPortal"] = JsonPrimitive(s.url)
             out["stalkerMac"] = JsonPrimitive(s.username)
             out["url"] = JsonPrimitive(s.url)
@@ -377,13 +383,13 @@ internal object LiveTvSyncLocal {
             out["xtreamUsername"] = JsonPrimitive("")
             out["xtreamPassword"] = JsonPrimitive("")
         } else {
-            out["sourceType"] = JsonPrimitive("m3u")
+            putDesktop("sourceType", JsonPrimitive("m3u"))
             out["url"] = JsonPrimitive(s.url)
             out["xtreamServer"] = JsonPrimitive("")
             out["xtreamUsername"] = JsonPrimitive("")
             out["xtreamPassword"] = JsonPrimitive("")
-            out["stalkerPortal"] = JsonPrimitive("")
-            out["stalkerMac"] = JsonPrimitive("")
+            putDesktop("stalkerPortal", JsonPrimitive(""))
+            putDesktop("stalkerMac", JsonPrimitive(""))
         }
         out["enabled"] = JsonPrimitive(true)
         return JsonObject(out)

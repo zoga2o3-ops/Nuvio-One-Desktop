@@ -109,6 +109,11 @@ internal object IptvSession {
                 guideFromMs = window.fromMs,
                 guideUntilMs = window.untilMs,
             )
+            com.nuvio.app.features.youtube.OneTubeDebugLog.line(
+                "iptv-load sources=${sources.size} channels=${loaded.channels.size} " +
+                    "movies=${loaded.movies.size} errors=${loaded.errors.size} " +
+                    "firstError=${loaded.errors.firstOrNull() ?: "none"}",
+            )
             val loadedAt = System.currentTimeMillis()
             val keepPrevious = previous.channels.isNotEmpty() &&
                 loaded.errors.isNotEmpty() &&

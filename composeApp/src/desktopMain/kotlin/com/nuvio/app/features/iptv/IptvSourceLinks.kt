@@ -37,3 +37,33 @@ internal fun xtreamCredentialsFromLink(raw: String): Pair<String, String>? {
     val pass = params["password"].orEmpty()
     return if (user.isNotBlank() && pass.isNotBlank()) user to pass else null
 }
+
+/**
+ * An M3U address made safe: local Windows paths become file URLs, and a bare host gets http://.
+ * HTTP(S), file and any other explicit scheme are kept as typed.
+ */
+internal fun normalizePlaylistUrl(raw: String): String {
+    val t = raw.trim()
+    if (t.isEmpty()) return t
+    val lower = t.lowercase()
+    if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("file://")) return t
+    if ("://" in t) return t
+    if (Regex("^[A-Za-z]:[\\\\/]").containsMatchIn(t) || t.startsWith("\\\\")) {
+        return runCatching { java.nio.file.Path.of(t).toUri().toString() }.getOrDefault(t)
+    }
+    return "http://$t"
+}
+
+/** What kind of address was typed, for diagnostics without logging the address itself. */
+internal fun playlistUrlShape(raw: String): String {
+    val t = raw.trim()
+    return when {
+        t.isEmpty() -> "empty"
+        t.startsWith("http://", true) || t.startsWith("https://", true) -> "http"
+        t.startsWith("file://", true) -> "file"
+        Regex("^[A-Za-z]:[\\\\/]").containsMatchIn(t) || t.startsWith("\\\\") -> "windows_path"
+        "://" in t -> "other_scheme"
+        ":" in t -> "host_port"
+        else -> "bare"
+    }
+}

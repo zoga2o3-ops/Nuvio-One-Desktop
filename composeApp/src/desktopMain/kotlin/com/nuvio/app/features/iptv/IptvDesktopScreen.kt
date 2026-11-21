@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.GridView
 import com.nuvio.app.core.ui.CoverNativeVideo
+import com.nuvio.app.features.youtube.OneTubeDebugLog
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonChecked
@@ -144,6 +145,7 @@ internal fun IptvDesktopScreen(
     var showAddSource by remember { mutableStateOf(false) }
     var showSources by remember { mutableStateOf(false) }
     var editingSource by remember { mutableStateOf<IptvSource?>(null) }
+    var sourceSaveError by remember { mutableStateOf<String?>(null) }
     var playing by remember { mutableStateOf<PlaybackTarget?>(null) }
     // Multiview: up to four channels at once, shown in place of the single player.
     // Four slots, one per tile; an empty slot is a tile with no channel yet.
@@ -1257,22 +1259,34 @@ internal fun IptvDesktopScreen(
     if (showAddSource) {
         AddSourceDialog(
             existing = editingSource,
+            saveError = sourceSaveError,
             onDismiss = {
                 showAddSource = false
                 editingSource = null
+                sourceSaveError = null
             },
             onAdd = { source ->
+                sourceSaveError = null
                 val target = editingSource
+                val next = sources.toMutableList()
                 if (target != null) {
-                    val index = sources.indexOfFirst { it.id == target.id }
-                    if (index >= 0) sources[index] = source else sources += source
+                    val index = next.indexOfFirst { it.id == target.id }
+                    if (index >= 0) next[index] = source else next += source
                 } else {
-                    sources += source
+                    next += source
                 }
-                IptvSourceStore.save(sources)
-                showAddSource = false
-                editingSource = null
-                refresh()
+                val error = runCatching { IptvSourceStore.save(next) }.exceptionOrNull()
+                if (error != null) {
+                    sourceSaveError = "Could not save the playlist: ${error.message ?: error.javaClass.simpleName}"
+                    OneTubeDebugLog.line("iptv-source-save-failed ${error.javaClass.simpleName}")
+                } else {
+                    sources.clear()
+                    sources.addAll(next)
+                    sourceSaveError = null
+                    showAddSource = false
+                    editingSource = null
+                    refresh()
+                }
             },
         )
     }
@@ -2241,6 +2255,7 @@ private fun AddSourceDialog(
     onDismiss: () -> Unit,
     onAdd: (IptvSource) -> Unit,
     existing: IptvSource? = null,
+    saveError: String? = null,
 ) {
     var kind by remember(existing?.id) { mutableStateOf(existing?.kind ?: "m3u") }
     var name by remember(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
@@ -2248,18 +2263,33 @@ private fun AddSourceDialog(
     var epgUrl by remember(existing?.id) { mutableStateOf(existing?.epgUrl.orEmpty()) }
     var username by remember(existing?.id) { mutableStateOf(existing?.username.orEmpty()) }
     var password by remember(existing?.id) { mutableStateOf(existing?.password.orEmpty()) }
+    var attempted by remember { mutableStateOf(false) }
+    val isM3u = kind == "m3u"
     val isXtream = kind.equals("xtream", true)
     val isStalker = kind.equals("stalker", true)
     val macValid = StalkerClient.isValidMac(username)
     val xtreamLinkCredentials = if (isXtream) xtreamCredentialsFromLink(url) else null
     val xtreamUser = username.ifBlank { xtreamLinkCredentials?.first.orEmpty() }
     val xtreamPass = password.ifBlank { xtreamLinkCredentials?.second.orEmpty() }
+    val xtreamServer = cleanXtreamServer(url)
+    val playlistUrl = normalizePlaylistUrl(url)
     val valid = when {
-        isXtream -> cleanXtreamServer(url).startsWith("http") &&
+        isXtream -> xtreamServer.startsWith("http") &&
             xtreamUser.isNotBlank() && xtreamPass.isNotBlank()
-        isStalker -> cleanXtreamServer(url).isNotBlank() && macValid
-        else -> url.startsWith("https://") || url.startsWith("http://") ||
-            (kind == "m3u" && url.startsWith("file://"))
+        isStalker -> xtreamServer.isNotBlank() && macValid
+        else -> playlistUrl.isNotBlank()
+    }
+    val validationMessage = when {
+        url.isBlank() -> "Enter a playlist URL, server or portal address."
+        isXtream && !xtreamServer.startsWith("http") ->
+            "Enter the server as host:port or http://host:port."
+        isXtream && xtreamUser.isBlank() -> "Enter the Xtream username."
+        isXtream && xtreamPass.isBlank() -> "Enter the Xtream password."
+        isStalker && !xtreamServer.startsWith("http") ->
+            "Enter the portal as host:port or http://host:port."
+        isStalker && username.isBlank() -> "Enter the MAC address the provider gave you."
+        isStalker && !macValid -> "Enter a MAC address like 00:1A:79:AB:CD:EF."
+        else -> null
     }
 
     AlertDialog(
@@ -2284,7 +2314,15 @@ private fun AddSourceDialog(
                 )
                 OutlinedTextField(
                     url,
-                    { url = it },
+                    { value ->
+                        url = value
+                        // A pasted Xtream link is recognised even if the M3U tab is selected.
+                        xtreamCredentialsFromLink(value)?.let { (linkUser, linkPass) ->
+                            if (isM3u) kind = "xtream"
+                            if (username.isBlank()) username = linkUser
+                            if (password.isBlank()) password = linkPass
+                        }
+                    },
                     label = {
                         Text(
                             when {
@@ -2294,9 +2332,26 @@ private fun AddSourceDialog(
                             },
                         )
                     },
+                    placeholder = {
+                        Text(
+                            when {
+                                kind == "xtream" -> "host:port or http://host:port"
+                                kind == "stalker" -> "http://portal:port/c"
+                                else -> "https://example.com/playlist.m3u or C:\\playlist.m3u"
+                            },
+                        )
+                    },
+                    isError = attempted && !valid,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (attempted && validationMessage != null) {
+                    Text(
+                        validationMessage,
+                        fontSize = 11.sp,
+                        color = Color(0xFFFF8A9B),
+                    )
+                }
                 if (kind == "xtream") {
                     OutlinedTextField(
                         username,
@@ -2345,6 +2400,19 @@ private fun AddSourceDialog(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                if (kind == "m3u") {
+                    Text(
+                        "Paste an http(s) playlist link, a file:// URL, or a local .m3u path such as C:\\playlist.m3u.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (saveError != null) {
+                    Text(
+                        saveError,
+                        fontSize = 11.sp,
+                        color = Color(0xFFFF8A9B),
+                    )
+                }
                 Text(
                     "Sources are saved privately on this computer. Add only streams you can access.",
                     style = MaterialTheme.typography.bodySmall,
@@ -2354,15 +2422,30 @@ private fun AddSourceDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    if (!valid) {
+                        attempted = true
+                        OneTubeDebugLog.line(
+                            "iptv-add-blocked kind=$kind url=${playlistUrlShape(url)} " +
+                                "user=${username.isNotBlank()} pass=${password.isNotBlank()} " +
+                                "reason=${validationMessage ?: "incomplete"}",
+                        )
+                        return@Button
+                    }
+                    val sourceUrl = when {
+                        isXtream -> xtreamServer
+                        isStalker -> xtreamServer
+                        else -> playlistUrl
+                    }
+                    OneTubeDebugLog.line(
+                        "iptv-add kind=$kind url=${playlistUrlShape(url)} " +
+                            "normalized=${playlistUrlShape(sourceUrl)} " +
+                            "user=${username.isNotBlank()} pass=${password.isNotBlank()}",
+                    )
                     onAdd(
                         IptvSource(
                             existing?.id ?: UUID.randomUUID().toString(),
                             name.ifBlank { if (isStalker) "Stalker portal" else if (isXtream) "Xtream" else "Playlist" },
-                            when {
-                                isXtream -> cleanXtreamServer(url)
-                                isStalker -> url.trim()
-                                else -> url.trim()
-                            },
+                            sourceUrl,
                             if (isStalker) "" else epgUrl.trim(),
                             kind,
                             when {
@@ -2374,7 +2457,7 @@ private fun AddSourceDialog(
                         ),
                     )
                 },
-                enabled = valid,
+                enabled = true,
             ) { Text(if (existing != null) "Save" else "Add") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
