@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -1334,73 +1335,146 @@ private fun LiveTvHeader(
         "series" to "Series",
         "recordings" to "Recordings",
     )
-    Box(Modifier.fillMaxWidth().height(64.dp).background(Color(0xFF050507)).padding(horizontal = 18.dp)) {
-        Row(
-            Modifier.align(Alignment.CenterStart),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            androidx.compose.foundation.Image(
-                painter = org.jetbrains.compose.resources.painterResource(
-                    nuvio.composeapp.generated.resources.Res.drawable.nuvio_one_logo,
-                ),
-                contentDescription = "Nuvio One",
-                modifier = Modifier.size(34.dp),
+    BoxWithConstraints(Modifier.fillMaxWidth().background(Color(0xFF050507))) {
+        // On a narrow window the centred tabs ran under the search box. Put the tabs on their
+        // own row instead so Recordings stays clickable at 1280x720 and below.
+        val availableWidth = maxWidth
+        val compact = availableWidth < 1500.dp
+        if (compact) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    HeaderBrand()
+                    Spacer(Modifier.weight(1f))
+                    HeaderActions(
+                        search = search,
+                        clockText = clockText,
+                        dayText = dayText,
+                        onSearch = onSearch,
+                        onAddSource = onAddSource,
+                        onSettings = onSettings,
+                        searchWidth = if (availableWidth < 1120.dp) 190.dp else 250.dp,
+                        showClock = availableWidth >= 1120.dp,
+                    )
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HeaderTabs(tabs, activeTab, onTab)
+                }
+            }
+        } else {
+            Box(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 18.dp)) {
+                Box(Modifier.align(Alignment.CenterStart)) {
+                    HeaderBrand()
+                }
+                Box(Modifier.align(Alignment.Center)) {
+                    HeaderTabs(tabs, activeTab, onTab)
+                }
+                Box(Modifier.align(Alignment.CenterEnd)) {
+                    HeaderActions(
+                        search = search,
+                        clockText = clockText,
+                        dayText = dayText,
+                        onSearch = onSearch,
+                        onAddSource = onAddSource,
+                        onSettings = onSettings,
+                        searchWidth = 272.dp,
+                        showClock = true,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeaderBrand() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        androidx.compose.foundation.Image(
+            painter = org.jetbrains.compose.resources.painterResource(
+                nuvio.composeapp.generated.resources.Res.drawable.nuvio_one_logo,
+            ),
+            contentDescription = "Nuvio One",
+            modifier = Modifier.size(34.dp),
+        )
+        Column {
+            Text("Live TV", fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp)
+            Text("NUVIO DESKTOP", fontSize = 9.sp, letterSpacing = 1.5.sp, color = IptvDim)
+        }
+    }
+}
+
+@Composable
+private fun HeaderTabs(
+    tabs: List<Pair<String, String>>,
+    activeTab: String,
+    onTab: (String) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tabs.forEach { (id, label) ->
+            HeaderTab(label, activeTab == id) { onTab(id) }
+        }
+    }
+}
+
+@Composable
+private fun HeaderActions(
+    search: String,
+    clockText: String,
+    dayText: String,
+    onSearch: (String) -> Unit,
+    onAddSource: () -> Unit,
+    onSettings: () -> Unit,
+    searchWidth: androidx.compose.ui.unit.Dp,
+    showClock: Boolean,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(searchWidth)) {
+            SearchBox(
+                value = search,
+                placeholder = "Search channels, programmes",
+                onValueChange = onSearch,
             )
-            Column {
-                Text("Live TV", fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp)
-                Text("NUVIO DESKTOP", fontSize = 9.sp, letterSpacing = 1.5.sp, color = IptvDim)
-            }
         }
-
-        Row(
-            Modifier.align(Alignment.Center),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            tabs.forEach { (id, label) ->
-                HeaderTab(label, activeTab == id) { onTab(id) }
-            }
-        }
-
-        Row(
-            Modifier.align(Alignment.CenterEnd),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.width(272.dp)) {
-                SearchBox(
-                    value = search,
-                    placeholder = "Search channels, programmes",
-                    onValueChange = onSearch,
-                )
-            }
+        if (showClock) {
             Spacer(Modifier.width(14.dp))
             Column(horizontalAlignment = Alignment.End) {
                 Text(clockText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(dayText, fontSize = 9.5.sp, color = IptvDim)
             }
-            Spacer(Modifier.width(6.dp))
-            IconButton(onClick = onSettings, modifier = Modifier.size(34.dp)) {
-                Icon(
-                    Icons.Filled.Settings,
-                    contentDescription = "Live TV settings",
-                    tint = IptvMuted,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            Spacer(Modifier.width(6.dp))
-            Row(
-                Modifier.clip(RoundedCornerShape(999.dp))
-                    .background(IptvRaised)
-                    .border(1.dp, IptvBorder, RoundedCornerShape(999.dp))
-                    .clickable(onClick = onAddSource)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, tint = IptvText, modifier = Modifier.size(15.dp))
-                Text("Add source", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
+        }
+        Spacer(Modifier.width(6.dp))
+        IconButton(onClick = onSettings, modifier = Modifier.size(34.dp)) {
+            Icon(
+                Icons.Filled.Settings,
+                contentDescription = "Live TV settings",
+                tint = IptvMuted,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Spacer(Modifier.width(6.dp))
+        Row(
+            Modifier.clip(RoundedCornerShape(999.dp))
+                .background(IptvRaised)
+                .border(1.dp, IptvBorder, RoundedCornerShape(999.dp))
+                .clickable(onClick = onAddSource)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null, tint = IptvText, modifier = Modifier.size(15.dp))
+            Text("Add source", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
