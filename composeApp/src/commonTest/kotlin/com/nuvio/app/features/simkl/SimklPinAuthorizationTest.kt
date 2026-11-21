@@ -86,4 +86,49 @@ class SimklPinAuthorizationTest {
         assertTrue(isSimklPinAuthorizationExpired(10_000L, 10_000L))
         assertTrue(isSimklPinAuthorizationExpired(null, 1L))
     }
+
+    @Test
+    fun `device authorization uses the complete url and keeps the device code`() {
+        val pending = SimklPinResponse(
+            userCode = "ABCDE",
+            deviceCode = "device-123",
+            verificationUri = "https://simkl.com/pin",
+            verificationUriComplete = "https://simkl.com/pin/ABCDE",
+            expiresIn = 900,
+            interval = 5,
+        ).toDeviceAuthorization(nowEpochMs = 1_000L)
+
+        assertEquals("ABCDE", pending?.userCode)
+        assertEquals("https://simkl.com/pin/ABCDE", pending?.verificationUrl)
+        assertEquals("device-123", pending?.deviceCode)
+        assertEquals(901_000L, pending?.expiresAtEpochMs)
+    }
+
+    @Test
+    fun `device authorization rejects responses without a server code`() {
+        assertNull(
+            SimklPinResponse(
+                userCode = "ABCDE",
+                verificationUri = "https://simkl.com/pin",
+            ).toDeviceAuthorization(0L),
+        )
+    }
+
+    @Test
+    fun `device token responses carry the refresh token and expiry`() {
+        val authorized = SimklPinResponse(
+            accessToken = "token",
+            refreshToken = "refresh",
+            expiresIn = 604_800,
+        ).toDevicePollResult()
+
+        val result = assertIs<SimklPinPollResult.Authorized>(authorized)
+        assertEquals("token", result.accessToken)
+        assertEquals("refresh", result.refreshToken)
+        assertEquals(604_800L, result.expiresInSeconds)
+        assertEquals(
+            SimklPinPollResult.Failed,
+            SimklPinResponse(result = "KO", message = "Authorization pending").toDevicePollResult(),
+        )
+    }
 }
