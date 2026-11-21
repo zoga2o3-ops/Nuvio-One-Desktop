@@ -60,6 +60,7 @@ It is the desktop companion to **[Nuvio One](https://github.com/zoga2o3-ops/Nuvi
 - 4K-aware scaling and a responsive layout.
 - Mini player.
 - Anime upscaling.
+- Send a debug report from **Settings → About** (redacted, same support channel as the TV and mobile apps).
 
 ### Live TV
 - M3U playlists and Xtream Codes logins.
@@ -71,6 +72,8 @@ It is the desktop companion to **[Nuvio One](https://github.com/zoga2o3-ops/Nuvi
 - Catch-up replay.
 - Multiview with up to four channels.
 - Recording to a local folder, including from the guide.
+- Play recordings made by the TV or phone on the SMB share.
+- Combine an HLS recording into one MPEG-TS file, or export MP4 without re-encoding (ffmpeg).
 - Movies and series from your provider in the Movies and Series tabs.
 - Quality badges and programme details.
 - Google Drive and Nuvio account sync of your Live TV setup.
@@ -132,7 +135,9 @@ It is the desktop companion to **[Nuvio One](https://github.com/zoga2o3-ops/Nuvi
 - Beta software: Windows 10 and 11 are the only builds published here.
 - The MSI is not code-signed yet, so Windows may warn about an unknown publisher.
 - Portable builds are not updated in place. The in-app updater installs the MSI.
-- Live TV recordings are written to a local folder. There is no SMB recording.
+- Live TV recordings are written to a local folder. The SMB share is for recordings made by the TV/phone, plus Combine and MP4 exports.
+- One SMB share at a time; its password is encrypted with Windows DPAPI.
+- MP4 export needs ffmpeg on PATH or a path set in **Recordings → Share & export**.
 - Stalker portals are not supported.
 
 ---
@@ -159,7 +164,8 @@ If Windows shows **"Unknown publisher"**, choose **More info → Run anyway** on
 3. **OneTube:** open OneTube. Browsing and search work without an account; sign in with a TV activation code for subscriptions and history.
 4. **Music:** open Music, sign in to YouTube Music, connect a Navidrome or WebDAV server, or add local files.
 5. **Sports:** open Sports and pick your teams.
-6. **Updates:** open **Settings → About** and choose **Check for updates**.
+6. **Recordings:** open **Live TV → Recordings → Share & export** to connect the TV/phone SMB share.
+7. **Updates:** open **Settings → About** and choose **Check for updates**.
 
 ---
 
@@ -188,16 +194,16 @@ Portable build:
 
 ```powershell
 .\gradlew.bat :composeApp:createReleaseDistributable `
-  "-Pnuvio.desktop.versionName=0.1.340" `
-  "-Pnuvio.desktop.versionCode=340"
+  "-Pnuvio.desktop.versionName=0.1.342" `
+  "-Pnuvio.desktop.versionCode=342"
 ```
 
 MSI build:
 
 ```powershell
 .\gradlew.bat :composeApp:packageReleaseMsi `
-  "-Pnuvio.desktop.versionName=0.1.340" `
-  "-Pnuvio.desktop.versionCode=340"
+  "-Pnuvio.desktop.versionName=0.1.342" `
+  "-Pnuvio.desktop.versionCode=342"
 ```
 
 The shared app uses Kotlin Multiplatform and Compose Multiplatform.
@@ -220,6 +226,7 @@ Problems that also happen in Nuvio Desktop belong with [Nuvio](https://github.co
 - **SmartTube / MediaServiceCore** by Yurii Liskov (MIT licence): the YouTube engine.
 - **SponsorBlock** by Ajay Ramachandran and its community.
 - **DeArrow** by Ajay Ramachandran and its community.
+- **jcifs-ng** by AgNO3 (LGPL 2.1): the SMB client used for shared recordings.
 - **mpv** and **compose-media-player** for the native player.
 - This product uses the TMDB API but is not endorsed or certified by TMDB.
 
