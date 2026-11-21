@@ -1,9 +1,7 @@
 name: Update Sideload Source
 
 on:
-  release:
-    types:
-      - published
+  # Windows releases have no IPA; this workflow is only used by the mobile release.
   workflow_call:
     inputs:
       tag:
