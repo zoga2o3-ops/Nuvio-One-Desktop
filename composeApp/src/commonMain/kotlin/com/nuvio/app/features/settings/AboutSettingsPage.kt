@@ -9,12 +9,17 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.build.AppVersionPolicy
+import com.nuvio.app.core.diagnostics.DebugReportHost
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.about_licenses_attributions_subtitle
 import nuvio.composeapp.generated.resources.about_supporters_contributors_subtitle
@@ -28,6 +33,8 @@ import nuvio.composeapp.generated.resources.compose_settings_root_about_section
 import nuvio.composeapp.generated.resources.compose_settings_root_check_updates_description
 import nuvio.composeapp.generated.resources.compose_settings_root_check_updates_title
 import nuvio.composeapp.generated.resources.compose_settings_root_privacy_policy_description
+import nuvio.composeapp.generated.resources.settings_about_send_debug_report
+import nuvio.composeapp.generated.resources.settings_about_send_debug_report_description
 import nuvio.composeapp.generated.resources.updates_debug_test_description
 import nuvio.composeapp.generated.resources.updates_debug_test_title
 import org.jetbrains.compose.resources.stringResource
@@ -74,6 +81,20 @@ internal fun LazyListScope.aboutSettingsContent(
                     isTablet = isTablet,
                     onClick = onLicensesAttributionsClick,
                 )
+                if (DebugReportHost.available) {
+                    SettingsGroupDivider(isTablet = isTablet)
+                    var showDebugReport by remember { mutableStateOf(false) }
+                    SettingsNavigationRow(
+                        title = stringResource(Res.string.settings_about_send_debug_report),
+                        description = stringResource(Res.string.settings_about_send_debug_report_description),
+                        icon = Icons.Default.BugReport,
+                        isTablet = isTablet,
+                        onClick = { showDebugReport = true },
+                    )
+                    if (showDebugReport) {
+                        DesktopDebugReportDialog(onDismiss = { showDebugReport = false })
+                    }
+                }
                 if (onCheckForUpdatesClick != null) {
                     SettingsGroupDivider(isTablet = isTablet)
                     UpdateChannelSettingsRow(isTablet = isTablet)

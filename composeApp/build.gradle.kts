@@ -64,6 +64,9 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     abstract val sentryEnvironment: Property<String>
 
     @get:Input
+    abstract val debugReportDiscordWebhook: Property<String>
+
+    @get:Input
     abstract val tmdbApiKey: Property<String>
 
     @get:Input
@@ -115,6 +118,19 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |    const val DSN = "${sentryDsn.get()}"
                 |    const val DESKTOP_DSN = "${sentryDesktopDsn.get()}"
                 |    const val ENVIRONMENT = "${sentryEnvironment.get()}"
+                |}
+                """.trimMargin()
+            )
+            val debugReportWebhook = debugReportDiscordWebhook.get()
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+            resolve("DebugReportConfig.kt").writeText(
+                """
+                |package com.nuvio.app.core.diagnostics
+                |
+                |object DebugReportConfig {
+                |    /** The same support webhook the TV and mobile apps use; blank disables upload. */
+                |    const val DISCORD_WEBHOOK = "$debugReportWebhook"
                 |}
                 """.trimMargin()
             )
@@ -639,6 +655,7 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
             else -> "production"
         }
     )
+    debugReportDiscordWebhook.set(runtimeConfigValue("DEBUG_REPORT_DISCORD_WEBHOOK"))
 }
 
 val isMacHost = System.getProperty("os.name").contains("mac", ignoreCase = true)
@@ -1247,6 +1264,8 @@ kotlin {
                 implementation(libs.ktor.client.cio)
                 implementation(libs.ktor.client.okhttp)
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
+                // Reading the Live TV recordings other Nuvio apps save on an SMB share.
+                implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
                 // HTML parsing for the Genius lyrics fallback (BitChord's Genius.kt).
                 implementation("org.jsoup:jsoup:1.18.3")
                 implementation(libs.quickjs.kt)

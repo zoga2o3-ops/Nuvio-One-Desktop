@@ -569,6 +569,15 @@
     <string name="settings_advanced_section_startup">STARTUP</string>
     <string name="settings_advanced_section_windows_graphics">WINDOWS GRAPHICS</string>
     <string name="settings_advanced_section_diagnostics">DIAGNOSTICS</string>
+<string name="settings_about_send_debug_report">Send debug report</string>
+<string name="settings_about_send_debug_report_description">Send app, device and Live TV details to support</string>
+<string name="debug_report_dialog_title">Send debug report</string>
+<string name="debug_report_dialog_body">The report includes the app and Windows versions, device details, your account support code, Live TV status and the recent OneTube log. Tokens, passwords, email addresses and IP addresses are removed before it leaves this computer.</string>
+<string name="debug_report_send">Send</string>
+<string name="debug_report_sending">Sending report...</string>
+<string name="debug_report_sent">Report sent. Reference: %1$s</string>
+<string name="debug_report_saved">Report saved on this computer. Reference: %1$s</string>
+<string name="debug_report_failed">Couldn\'t send the report. Try again later.</string>
     <string name="settings_advanced_section_discord">DISCORD</string>
     <string name="settings_advanced_section_cache">CACHE</string>
     <string name="settings_advanced_remember_last_profile">Remember Last Profile</string>

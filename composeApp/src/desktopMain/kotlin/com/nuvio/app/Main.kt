@@ -32,6 +32,8 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.deeplink.handleAppUrl
+import com.nuvio.app.core.diagnostics.DebugReportHost
+import com.nuvio.app.core.diagnostics.DesktopDebugReport
 import com.nuvio.app.core.diagnostics.SentryInitializer
 import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.core.ui.LocalNuvioPlatformDensity
@@ -82,6 +84,8 @@ fun main(args: Array<String>) {
     }
     applyDesktopRendererPreference()
     SentryInitializer.start()
+    DebugReportHost.available = true
+    DebugReportHost.send = { DesktopDebugReport.send() }
     configureDesktopQuickJsLibrary()
     configureDesktopChrome()
     configureLinuxSwingGlobalsBeforeAwt()

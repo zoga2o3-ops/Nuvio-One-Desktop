@@ -86,8 +86,10 @@ import com.nuvio.app.features.player.desktop.isDesktopAppFullscreen
 import com.nuvio.app.features.player.PlatformPlayerSurface
 import com.nuvio.app.features.player.PlayerControlsState
 import com.nuvio.app.features.player.PlayerResizeMode
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.awt.Desktop
 import java.nio.file.Path
 import java.text.SimpleDateFormat
@@ -117,6 +119,8 @@ internal data class PlaybackTarget(
     val title: String,
     /** A separate audio stream (YouTube's adaptive audio); null when the video already carries its sound. */
     val audioUrl: String? = null,
+    /** This is a Live TV recording (possibly from the share), not a channel. */
+    val isRecording: Boolean = false,
 )
 
 /** Live TV and on-demand playback for the desktop app. */
@@ -147,6 +151,56 @@ internal fun IptvDesktopScreen(
     var playbackError by remember { mutableStateOf<String?>(null) }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     var recordings by remember { mutableStateOf(IptvRecorder.recordings()) }
+    var smbConfig by remember { mutableStateOf(IptvSmbStore.load()) }
+    var sharedRecordings by remember { mutableStateOf<List<SharedRecording>>(emptyList()) }
+    var scanningShared by remember { mutableStateOf(false) }
+    var recordingsMessage by remember { mutableStateOf<String?>(null) }
+    var showRecordingSettings by remember { mutableStateOf(false) }
+    var exportProgress by remember { mutableStateOf<IptvRecordingExport.Progress?>(null) }
+    var exportTitle by remember { mutableStateOf<String?>(null) }
+
+    /** Reads the share's recording folders (the TV's and the phone's layouts). */
+    fun scanShare() {
+        val config = smbConfig
+        if (config == null) {
+            sharedRecordings = emptyList()
+            return
+        }
+        if (scanningShared) return
+        scanningShared = true
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { IptvSharedRecordings.scan(config) } }
+            result.onSuccess {
+                sharedRecordings = it
+            }.onFailure {
+                recordingsMessage = "Couldn't read the share: ${it.message ?: it.javaClass.simpleName}"
+            }
+            scanningShared = false
+        }
+    }
+
+    fun refreshRecordings() {
+        recordings = IptvRecorder.recordings()
+        scanShare()
+    }
+
+    fun runRecordingJob(title: String, block: suspend ((IptvRecordingExport.Progress) -> Unit) -> Result<IptvRecordingExport.Info>) {
+        if (exportProgress != null) return
+        exportTitle = title
+        scope.launch {
+            exportProgress = IptvRecordingExport.Progress("Starting", 0L, 0L)
+            val result = block { exportProgress = it }
+            exportProgress = null
+            exportTitle = null
+            result.onSuccess {
+                recordingsMessage = "Saved to ${it.destination}"
+                recordings = IptvRecorder.recordings()
+                if (smbConfig != null) scanShare()
+            }.onFailure {
+                recordingsMessage = it.message ?: it.javaClass.simpleName
+            }
+        }
+    }
     // This computer's favourites, and the TVs' (synced, in their form; matched to channels below).
     var ownFavorites by remember { mutableStateOf(IptvFavoritesStore.load()) }
     var tvFavorites by remember { mutableStateOf(IptvTvFavorites.load()) }
@@ -154,6 +208,10 @@ internal fun IptvDesktopScreen(
     var showSettings by remember { mutableStateOf(false) }
     var playRetry by remember { mutableStateOf(0) }
     var reconnecting by remember { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(activeTab, smbConfig) {
+        if (activeTab == "recordings") scanShare()
+    }
 
     // The TVs' order first (their Favourites group), then this computer's stars in the order starred.
     val favoriteOrder = remember(guide.channels, ownFavorites, tvFavorites) {
@@ -595,8 +653,17 @@ internal fun IptvDesktopScreen(
 
                 "recordings" -> IptvRecordingsPane(
                     recordings = recordings,
+                    shared = sharedRecordings,
+                    smbConfigured = smbConfig != null,
+                    smbLabel = smbConfig?.label,
+                    scanning = scanningShared,
+                    scanError = recordingsMessage,
+                    busy = exportProgress,
+                    busyTitle = exportTitle,
                     onPlay = { path ->
-                        playing = PlaybackTarget(path.toUri().toString(), emptyMap(), path.fileName.toString())
+                        playing = PlaybackTarget(
+                            path.toUri().toString(), emptyMap(), path.fileName.toString(), isRecording = true,
+                        )
                         playbackError = null
                         onDemand = false
                         activeTab = "live"
@@ -605,11 +672,74 @@ internal fun IptvDesktopScreen(
                         IptvRecorder.delete(it)
                         recordings = IptvRecorder.recordings()
                     },
-                    onRefresh = { recordings = IptvRecorder.recordings() },
+                    onRefresh = ::refreshRecordings,
                     onOpenFolder = {
                         runCatching { Desktop.getDesktop().open(IptvRecorder.directory.toFile()) }
                     },
                     onChangeFolder = ::changeRecordingFolder,
+                    onExportLocal = { path ->
+                        recordingsMessage = null
+                        runRecordingJob(path.fileName.toString()) { progress ->
+                            IptvRecordingExport.exportLocal(path, progress)
+                        }
+                    },
+                    onPlayShared = { rec ->
+                        val config = smbConfig
+                        if (config == null) {
+                            recordingsMessage = "Set up the SMB share first."
+                        } else {
+                            playing = PlaybackTarget(
+                                IptvRecordingServer.urlFor(rec.id, config, rec.shareDir),
+                                emptyMap(),
+                                rec.title,
+                                isRecording = true,
+                            )
+                            playbackError = null
+                            onDemand = false
+                            activeTab = "live"
+                        }
+                    },
+                    onCombineShared = { rec, toShare ->
+                        val config = smbConfig
+                        if (config == null) {
+                            recordingsMessage = "Set up the SMB share first."
+                        } else {
+                            recordingsMessage = null
+                            runRecordingJob(rec.title) { progress ->
+                                IptvRecordingExport.combineShared(config, rec, toShare, progress)
+                            }
+                        }
+                    },
+                    onExportShared = { rec, toShare ->
+                        val config = smbConfig
+                        if (config == null) {
+                            recordingsMessage = "Set up the SMB share first."
+                        } else {
+                            recordingsMessage = null
+                            runRecordingJob(rec.title) { progress ->
+                                IptvRecordingExport.exportShared(config, rec, toShare, progress)
+                            }
+                        }
+                    },
+                    onDeleteShared = { rec ->
+                        val config = smbConfig
+                        if (config == null) {
+                            recordingsMessage = "Set up the SMB share first."
+                        } else {
+                            scope.launch {
+                                val ok = withContext(Dispatchers.IO) {
+                                    IptvSmbClient.deleteRecursively(config, rec.shareDir)
+                                }
+                                if (ok) {
+                                    recordingsMessage = "Deleted \"${rec.title}\" from the share"
+                                    scanShare()
+                                } else {
+                                    recordingsMessage = "Couldn't delete \"${rec.title}\" from the share"
+                                }
+                            }
+                        }
+                    },
+                    onRecordingSettings = { showRecordingSettings = true },
                 )
 
                 else -> Row(Modifier.fillMaxSize()) {
@@ -896,7 +1026,7 @@ internal fun IptvDesktopScreen(
 
                     TitleRow(
                         title = when {
-                            playing?.url?.startsWith("file:") == true -> playing?.title ?: "Recording"
+                            playing?.isRecording == true || playing?.url?.startsWith("file:") == true -> playing?.title ?: "Recording"
                             onDemand -> selectedMovie?.name ?: "On demand"
                             currentProgram != null -> currentProgram.title
                             selected != null -> selected.name
@@ -1055,7 +1185,7 @@ internal fun IptvDesktopScreen(
     }
 
     // The video windows sit above Compose, so they hide while a dialog is open over them.
-    CoverNativeVideo(covering = showSettings || showAddSource || showSources)
+    CoverNativeVideo(covering = showSettings || showAddSource || showSources || showRecordingSettings)
     if (showSettings) {
         val orderGroups = remember(visibleChannels) {
             visibleChannels.map { it.group }.filter { it.isNotBlank() }.distinct()
@@ -1073,6 +1203,17 @@ internal fun IptvDesktopScreen(
             onManageSources = {
                 showSettings = false
                 showSources = true
+            },
+        )
+    }
+
+    if (showRecordingSettings) {
+        IptvRecordingSettingsDialog(
+            onDismiss = { showRecordingSettings = false },
+            onSaved = { config ->
+                smbConfig = config
+                if (config == null) sharedRecordings = emptyList()
+                recordingsMessage = null
             },
         )
     }

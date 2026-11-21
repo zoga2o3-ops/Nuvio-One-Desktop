@@ -32,6 +32,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -166,22 +170,42 @@ private fun VodCard(movie: VodItem, onClick: () -> Unit) {
     }
 }
 
-/** Recordings page: saved files with play, delete and folder actions. */
+/** Recordings page: local files plus what the TV and phone saved on the SMB share. */
 @Composable
 internal fun IptvRecordingsPane(
     recordings: List<Path>,
+    shared: List<SharedRecording>,
+    smbConfigured: Boolean,
+    smbLabel: String?,
+    scanning: Boolean,
+    scanError: String?,
+    busy: IptvRecordingExport.Progress?,
+    busyTitle: String?,
     onPlay: (Path) -> Unit,
     onDelete: (Path) -> Unit,
     onRefresh: () -> Unit,
     onOpenFolder: () -> Unit,
     onChangeFolder: () -> Unit,
+    onExportLocal: (Path) -> Unit,
+    onPlayShared: (SharedRecording) -> Unit,
+    onCombineShared: (SharedRecording, Boolean) -> Unit,
+    onExportShared: (SharedRecording, Boolean) -> Unit,
+    onDeleteShared: (SharedRecording) -> Unit,
+    onRecordingSettings: () -> Unit,
 ) {
+    var action by remember { mutableStateOf<Pair<SharedRecording, String>?>(null) }
+    var deleteShared by remember { mutableStateOf<SharedRecording?>(null) }
+
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Recordings", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
                 Text(
-                    "${recordings.size} saved · ${IptvRecordingStore.folder()}",
+                    buildString {
+                        append("${recordings.size} on this computer")
+                        if (smbConfigured) append(" \u00B7 ${shared.size} on the share")
+                        append(" \u00B7 ${IptvRecordingStore.folder()}")
+                    },
                     fontSize = 11.5.sp,
                     color = IptvDim,
                     maxLines = 1,
@@ -191,22 +215,55 @@ internal fun IptvRecordingsPane(
             TextButton(onClick = onRefresh) {
                 Icon(Icons.Filled.Refresh, contentDescription = null, tint = IptvMuted, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Refresh", fontSize = 12.sp, color = IptvMuted)
+                Text(if (scanning) "Scanning..." else "Refresh", fontSize = 12.sp, color = IptvMuted)
             }
-            TextButton(onClick = onChangeFolder) {
+            TextButton(onClick = onRecordingSettings) {
                 Icon(Icons.Filled.Folder, contentDescription = null, tint = IptvMuted, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Change folder", fontSize = 12.sp, color = IptvMuted)
+                Text("Share & export", fontSize = 12.sp, color = IptvMuted)
             }
-            TextButton(onClick = onOpenFolder) {
-                Icon(Icons.Filled.Folder, contentDescription = null, tint = IptvMuted, modifier = Modifier.size(15.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Open folder", fontSize = 12.sp, color = IptvMuted)
-            }
+            TextButton(onClick = onChangeFolder) { Text("Change folder", fontSize = 12.sp, color = IptvMuted) }
+            TextButton(onClick = onOpenFolder) { Text("Open folder", fontSize = 12.sp, color = IptvMuted) }
         }
         Spacer(Modifier.height(14.dp))
 
-        if (recordings.isEmpty()) {
+        busy?.let { progress ->
+            Column(
+                Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(IptvPanel)
+                    .border(1.dp, IptvBorderSoft, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Text(
+                    "${progress.stage} ${busyTitle.orEmpty()}".trim(),
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = {
+                        if (progress.totalBytes > 0) {
+                            (progress.doneBytes.toFloat() / progress.totalBytes).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "${progress.doneBytes / 1024 / 1024} MB of ${progress.totalBytes / 1024 / 1024} MB",
+                    fontSize = 10.5.sp,
+                    color = IptvDim,
+                )
+            }
+        }
+
+        scanError?.let {
+            Text(it, fontSize = 11.5.sp, color = Color(0xFFFF8A9B), modifier = Modifier.padding(bottom = 8.dp))
+        }
+
+        if (recordings.isEmpty() && shared.isEmpty()) {
             Column(
                 Modifier.fillMaxWidth().height(240.dp)
                     .clip(RoundedCornerShape(14.dp))
@@ -225,7 +282,7 @@ internal fun IptvRecordingsPane(
                 Text("No recordings yet.", fontSize = 12.5.sp, color = IptvMuted)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Use Record while watching a channel to save it here.",
+                    "Use Record while watching a channel, or connect the TV's SMB share in Share & export.",
                     fontSize = 11.sp,
                     color = IptvDim,
                 )
@@ -236,13 +293,16 @@ internal fun IptvRecordingsPane(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
+                if (recordings.isNotEmpty()) {
+                    item { SectionHeader("On this computer") }
+                }
                 items(recordings, key = { it.toString() }) { path ->
                     Row(
                         Modifier.fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
                             .background(IptvPanel)
                             .border(1.dp, IptvBorderSoft, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
@@ -251,22 +311,12 @@ internal fun IptvRecordingsPane(
                                 .background(Color(0xFF241621)),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                                tint = IptvAccent,
-                                modifier = Modifier.size(20.dp),
-                            )
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = IptvAccent, modifier = Modifier.size(20.dp))
                         }
                         Column(Modifier.weight(1f)) {
+                            Text(path.fileName.toString(), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
-                                path.fileName.toString(),
-                                fontSize = 13.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                "${runCatching { path.toFile().length() / 1024 / 1024 }.getOrDefault(0L)} MB · ${path.parent?.fileName}",
+                                "${runCatching { path.toFile().length() / 1024 / 1024 }.getOrDefault(0L)} MB \u00B7 ${path.parent?.fileName}",
                                 fontSize = 11.sp,
                                 color = IptvDim,
                                 maxLines = 1,
@@ -274,12 +324,129 @@ internal fun IptvRecordingsPane(
                             )
                         }
                         TextButton(onClick = { onPlay(path) }) { Text("Play", fontSize = 12.sp) }
+                        TextButton(onClick = { onExportLocal(path) }) { Text("Export MP4", fontSize = 12.sp) }
                         TextButton(onClick = { onDelete(path) }) { Text("Delete", fontSize = 12.sp, color = IptvMuted) }
+                    }
+                }
+
+                if (smbConfigured) {
+                    item {
+                        SectionHeader(
+                            if (shared.isEmpty()) "On the SMB share - scanning $smbLabel"
+                            else "On the SMB share - ${shared.size} recording${if (shared.size == 1) "" else "s"}",
+                        )
+                    }
+                    if (shared.isEmpty()) {
+                        item {
+                            Text(
+                                if (scanning) "Reading the share..." else "No other recordings on the share yet.",
+                                fontSize = 11.5.sp,
+                                color = IptvDim,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                    items(shared, key = { "shared:${it.id}" }) { rec ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(IptvPanel)
+                                .border(1.dp, IptvBorderSoft, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(
+                                Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF1C2433)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = IptvAccent, modifier = Modifier.size(20.dp))
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    (if (rec.isRecording) "\u25CF " else "") + rec.title,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    buildString {
+                                        if (rec.channelName.isNotBlank()) append(rec.channelName).append(" \u00B7 ")
+                                        append(rec.durationSec.toLong().let(::formatVodDuration))
+                                        append(" \u00B7 ").append(rec.sizeBytes / 1024 / 1024).append(" MB")
+                                        if (rec.isRecording) append(" \u00B7 recording now")
+                                    },
+                                    fontSize = 11.sp,
+                                    color = IptvDim,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            TextButton(onClick = { onPlayShared(rec) }) { Text("Play", fontSize = 12.sp) }
+                            if (!rec.isRecording) {
+                                TextButton(onClick = { action = rec to "combine" }) { Text("Combine", fontSize = 12.sp) }
+                                TextButton(onClick = { action = rec to "export" }) { Text("Export MP4", fontSize = 12.sp) }
+                                TextButton(onClick = { deleteShared = rec }) { Text("Delete", fontSize = 12.sp, color = IptvMuted) }
+                            }
+                        }
                     }
                 }
             }
         }
     }
+
+    action?.let { (rec, kind) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { action = null },
+            title = { Text(if (kind == "combine") "Combine recording" else "Export recording") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(rec.title, fontSize = 12.5.sp)
+                    Text(
+                        if (kind == "combine") "One MPEG-TS file, joined without re-encoding."
+                        else "Remux to MP4 with ffmpeg. No re-encoding, so the same quality.",
+                        fontSize = 11.5.sp,
+                        color = IptvDim,
+                    )
+                    TextButton(onClick = {
+                        action = null
+                        if (kind == "combine") onCombineShared(rec, true) else onExportShared(rec, true)
+                    }) { Text("Save to SMB share (Exports)") }
+                    TextButton(onClick = {
+                        action = null
+                        if (kind == "combine") onCombineShared(rec, false) else onExportShared(rec, false)
+                    }) { Text("Save on this computer") }
+                }
+            },
+            confirmButton = { TextButton(onClick = { action = null }) { Text("Cancel") } },
+        )
+    }
+    deleteShared?.let { rec ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleteShared = null },
+            title = { Text("Delete this recording?") },
+            text = { Text("\"${rec.title}\" will be removed from the share, for every device.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteShared = null
+                    onDeleteShared(rec)
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deleteShared = null }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text,
+        fontSize = 11.5.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = IptvMuted,
+        modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+    )
 }
 
 private fun formatVodDuration(totalSeconds: Long): String {
