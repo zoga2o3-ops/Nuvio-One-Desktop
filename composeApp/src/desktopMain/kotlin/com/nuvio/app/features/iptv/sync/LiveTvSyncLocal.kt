@@ -10,7 +10,9 @@ import com.nuvio.app.features.iptv.IptvSettings
 import com.nuvio.app.features.iptv.IptvSettingsStore
 import com.nuvio.app.features.iptv.IptvSource
 import com.nuvio.app.features.iptv.IptvSourceStore
+import com.nuvio.app.features.iptv.cleanXtreamServer
 import com.nuvio.app.features.iptv.sync.LiveTvMerge.str
+import com.nuvio.app.features.iptv.xtreamCredentialsFromLink
 import java.nio.file.Files
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
