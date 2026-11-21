@@ -70,6 +70,20 @@ internal object SportsSettings {
     fun setChannelRegion(value: String) {
         store.putString("channelRegion", value)
     }
+
+    /** Sports shown in the Sports hub. Empty/unknown values fall back to all sports. */
+    fun enabledSports(): Set<String> {
+        val known = SportsCatalog.sports.map { it.apiName }.toSet()
+        val raw = store.getString("enabledSports") ?: return known
+        val saved = raw.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        return saved.intersect(known).ifEmpty { known }
+    }
+
+    fun setEnabledSports(value: Set<String>) {
+        val known = SportsCatalog.sports.map { it.apiName }.toSet()
+        val valid = value.intersect(known).ifEmpty { known }
+        store.putString("enabledSports", valid.joinToString("\n"))
+    }
 }
 
 /** The channel regions offered in Sports settings, with the tags that mark them in channel names. */

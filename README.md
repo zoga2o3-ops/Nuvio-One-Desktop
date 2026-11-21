@@ -78,6 +78,7 @@ It is the desktop companion to **[Nuvio One](https://github.com/zoga2o3-ops/Nuvi
 ### Sports
 - Scores by day and league.
 - US college sports: football, men's and women's basketball, baseball, softball, hockey and soccer.
+- Show or hide each sport in Sports settings.
 - My Teams.
 - League tables.
 - League and team pages.

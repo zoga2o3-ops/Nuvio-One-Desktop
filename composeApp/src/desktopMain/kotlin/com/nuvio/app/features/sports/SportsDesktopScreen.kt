@@ -119,13 +119,21 @@ internal fun SportsDesktopScreen(
     onWatch: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    var sport by remember { mutableStateOf(SportsCatalog.sports.first()) }
+    var enabledSports by remember { mutableStateOf(SportsSettings.enabledSports()) }
+    val visibleSports = SportsCatalog.sports.filter { it.apiName in enabledSports }
+    var sport by remember { mutableStateOf(visibleSports.first()) }
     var mode by remember { mutableStateOf(SportsMode.HUB) }
     var myTeamsOnly by remember { mutableStateOf(false) }
     var dayIndex by remember { mutableStateOf(0) }
     var chip by remember { mutableStateOf("all") }
     var videoWindow by remember { mutableStateOf(true) }
     var weekEvents by remember { mutableStateOf<List<SportsEvent>>(emptyList()) }
+
+    LaunchedEffect(enabledSports) {
+        if (sport.apiName !in enabledSports) {
+            visibleSports.firstOrNull()?.let { sport = it }
+        }
+    }
 
     val iptvSources = remember { IptvSourceStore.load() }
     LaunchedEffect(iptvSources.size) {
@@ -418,6 +426,7 @@ internal fun SportsDesktopScreen(
                     when (mode) {
                     SportsMode.HUB -> HubPane(
                         sport = sport,
+                        sports = visibleSports,
                         dayIndex = dayIndex,
                         onDay = { dayIndex = it },
                         onSport = { sport = it },
@@ -539,6 +548,7 @@ internal fun SportsDesktopScreen(
             pins = pins,
             onPins = { pins = it },
             channelGroups = remember(iptvChannels) { iptvChannels.map { it.group }.distinct().sorted() },
+            onSportsChanged = { enabledSports = it },
             onDismiss = {
                 showSettings = false
                 refreshHub()
@@ -714,6 +724,7 @@ private fun SportsPill(label: String, active: Boolean, onClick: () -> Unit) {
 @Composable
 private fun HubPane(
     sport: SportCategory,
+    sports: List<SportCategory>,
     dayIndex: Int,
     onDay: (Int) -> Unit,
     onSport: (SportCategory) -> Unit,
@@ -812,7 +823,7 @@ private fun HubPane(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            SportsCatalog.sports.forEach { item ->
+            sports.forEach { item ->
                 SportsPill("${item.icon}  ${item.label}", item.apiName == sport.apiName) { onSport(item) }
             }
         }
@@ -3008,6 +3019,7 @@ private fun SportsSettingsDialog(
     pins: List<PinnedTeam>,
     onPins: (List<PinnedTeam>) -> Unit,
     channelGroups: List<String>,
+    onSportsChanged: (Set<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -3023,6 +3035,7 @@ private fun SportsSettingsDialog(
                 pins = pins,
                 onPins = onPins,
                 channelGroups = channelGroups,
+                onSportsChanged = onSportsChanged,
                 modifier = Modifier.width(470.dp).heightIn(max = 560.dp),
             )
         },
@@ -3075,15 +3088,64 @@ private fun SportsSettingsBody(
     onPins: (List<PinnedTeam>) -> Unit,
     channelGroups: List<String>,
     modifier: Modifier,
+    onSportsChanged: (Set<String>) -> Unit = {},
 ) {
     var scoreDelay by remember { mutableStateOf(SportsSettings.scoreDelayMinutes()) }
     var region by remember { mutableStateOf(SportsSettings.channelRegion()) }
     var preferred by remember { mutableStateOf(SportsSettings.preferredGroups()) }
     var groupQuery by remember { mutableStateOf("") }
+    var enabledSports by remember { mutableStateOf(SportsSettings.enabledSports()) }
             Column(
                 modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Sports", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "Show only the sports you follow in the Sports hub.",
+                        fontSize = 11.sp,
+                        color = SportsDim,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    SportsCatalog.sports.forEach { item ->
+                        val active = item.apiName in enabledSports
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    val next =
+                                        if (active) enabledSports - item.apiName
+                                        else enabledSports + item.apiName
+                                    if (next.isNotEmpty()) {
+                                        enabledSports = next
+                                        SportsSettings.setEnabledSports(next)
+                                        onSportsChanged(next)
+                                    }
+                                }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "${item.icon}  ${item.label}",
+                                fontSize = 12.5.sp,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Box(
+                                Modifier.width(38.dp).height(22.dp)
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(if (active) SportsAccent else SportsPanelRaised),
+                                contentAlignment = if (active) Alignment.CenterEnd else Alignment.CenterStart,
+                            ) {
+                                Box(
+                                    Modifier.padding(horizontal = 3.dp).size(16.dp)
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(if (active) Color(0xFF07101C) else SportsMuted),
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
