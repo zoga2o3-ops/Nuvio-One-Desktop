@@ -173,6 +173,11 @@ internal fun IptvDesktopScreen(
     LaunchedEffect(playerController) {
         IptvRecorder.onPlayerControllerChanged(playerController)
     }
+    LaunchedEffect(multiview != null) {
+        // Multiview replaces the single player surface, so a player-owned recording has to move
+        // to the background downloader before the surface (and mpv handle) goes away.
+        if (multiview != null) IptvRecorder.onPlaybackChanged(null)
+    }
     DisposableEffect(Unit) {
         onDispose { IptvRecorder.onScreenClosed() }
     }

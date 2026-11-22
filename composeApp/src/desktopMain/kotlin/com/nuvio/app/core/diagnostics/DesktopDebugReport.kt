@@ -112,6 +112,9 @@ internal object DesktopDebugReport {
         appendLine("programs=${runCatching { IptvSession.guide.programs.values.sumOf { it.size } }.getOrDefault(0)}")
         appendLine("lastLoadError=${runCatching { IptvSession.guide.errors.firstOrNull() }.getOrNull() ?: "none"}")
         appendLine("localRecordings=${runCatching { IptvRecorder.recordings().size }.getOrDefault(0)}")
+        appendLine("recordingActive=${runCatching { IptvRecorder.recording }.getOrDefault(false)}")
+        appendLine("recordingNotice=${runCatching { IptvRecorder.notice }.getOrNull()?.take(300) ?: "none"}")
+        appendLine("recordingError=${runCatching { IptvRecorder.error }.getOrNull()?.take(300) ?: "none"}")
         appendLine("smbConfigured=${runCatching { IptvSmbStore.load() != null }.getOrDefault(false)}")
 
         section("RECENT LOG")
