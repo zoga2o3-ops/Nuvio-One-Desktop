@@ -109,8 +109,11 @@ internal object IptvRecorder {
         synchronized(lock) {
             if (recording) return false
             val file = newFile(name, url)
-            if (!native.setStreamRecord(file.toAbsolutePath().toString())) return false
             runCatching { Files.newOutputStream(file, StandardOpenOption.CREATE).close() }
+            if (!native.setStreamRecord(file.toAbsolutePath().toString())) {
+                runCatching { Files.deleteIfExists(file) }
+                return false
+            }
             error = null
             notice = null
             activeFile = file
