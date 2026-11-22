@@ -25,6 +25,7 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.GZIPInputStream
+import kotlinx.serialization.json.jsonPrimitive
 
 internal object IptvLoader {
     private const val MAX_REDIRECTS = 8
@@ -333,10 +334,6 @@ internal object IptvLoader {
                     }
                 }
                 val errors = ArrayList<String>()
-                if (playlist.entries.isEmpty()) {
-                    errors += "${source.name}: the link returned no channels. It may be a login page, " +
-                        "an HTML page, or a redirect the provider only allows in its own app."
-                }
                 val channels = playlist.entries.mapIndexed { index, entry ->
                     LiveChannel(
                         // Same key scheme as before, so favourites/recordings stay attached.
@@ -355,11 +352,27 @@ internal object IptvLoader {
                         drm = entry.drm,
                     )
                 }
+                if (channels.isEmpty() && source.kind.equals("xtream", true)) {
+                    val apiChannels = runCatching { xtreamApiChannels(source) }.getOrNull().orEmpty()
+                    if (apiChannels.isNotEmpty()) {
+                        return SourceResult(apiChannels, sourceMovies, playlist.epgUrls.toList(), emptyList())
+                    }
+                }
+                if (channels.isEmpty()) {
+                    errors += "${source.name}: the link returned no channels. It may be a login page, " +
+                        "an HTML page, or a redirect the provider only allows in its own app."
+                }
                 return SourceResult(channels, sourceMovies, playlist.epgUrls.toList(), errors)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 lastError = e
                 if (attempt == 0 && e is IOException) delay(900) else break
+            }
+        }
+        if (source.kind.equals("xtream", true)) {
+            val apiChannels = runCatching { xtreamApiChannels(source) }.getOrNull().orEmpty()
+            if (apiChannels.isNotEmpty()) {
+                return SourceResult(apiChannels, emptyList(), emptyList(), emptyList())
             }
         }
         return SourceResult(
@@ -481,6 +494,75 @@ internal object IptvLoader {
                 url = url,
                 headers = emptyMap(),
                 catchup = null,
+                drm = null,
+            )
+        }
+    }
+
+    /**
+     * Loads live channels through Xtream's player_api.php. Some providers block the one-shot
+     * get.php playlist (this one answers HTTP 884), while the API stays available; TiviMate and
+     * the TV app use the API for the same reason. Keys are stable across loads.
+     */
+    private fun xtreamApiChannels(source: IptvSource): List<LiveChannel> {
+        fun element(text: String) = runCatching {
+            kotlinx.serialization.json.Json.parseToJsonElement(text)
+        }.getOrNull()
+
+        fun fetchObject(url: String) =
+            open(url).use { it.reader(Charsets.UTF_8).readText() }.let(::element)
+                as? kotlinx.serialization.json.JsonObject
+
+        fun fetchArray(action: String) = open(xtreamUrl(source, "player_api.php", "action=$action"))
+            .use { it.reader(Charsets.UTF_8).readText() }
+            .let(::element) as? kotlinx.serialization.json.JsonArray
+
+        fun kotlinx.serialization.json.JsonElement.str(key: String): String? =
+            ((this as? kotlinx.serialization.json.JsonObject)?.get(key) as? kotlinx.serialization.json.JsonPrimitive)
+                ?.content?.takeIf { it.isNotBlank() && it != "null" }
+
+        val base = cleanXtreamServer(source.url)
+        require(base.startsWith("http://") || base.startsWith("https://")) { "Xtream server must be HTTP(S)" }
+        fun encoded(value: String) = URLEncoder.encode(value, StandardCharsets.UTF_8)
+        val api = "$base/player_api.php?username=${encoded(source.username)}&password=${encoded(source.password)}"
+        val account = fetchObject(api) ?: error("Not an Xtream API response")
+        val user = account["user_info"] as? kotlinx.serialization.json.JsonObject
+        if (user?.get("auth")?.jsonPrimitive?.content == "0") {
+            error("Login failed: check the username and password")
+        }
+        val status = user?.get("status")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        if (status != null && !status.equals("Active", ignoreCase = true)) error("Account $status")
+        val allowed = (user?.get("allowed_output_formats") as? kotlinx.serialization.json.JsonArray)
+            ?.mapNotNull { it.jsonPrimitive.content?.lowercase() }
+            ?.toSet()
+            .orEmpty()
+        val extension = if (allowed.isNotEmpty() && "ts" !in allowed && "m3u8" in allowed) "m3u8" else "ts"
+
+        val categories = fetchArray("get_live_categories").orEmpty()
+            .mapNotNull { c -> c.str("category_id")?.let { id -> id to (c.str("category_name") ?: "Other") } }
+            .toMap()
+        val streams = fetchArray("get_live_streams") ?: error("The Xtream API returned no live streams")
+        return streams.mapIndexedNotNull { index, s ->
+            val id = s.str("stream_id") ?: return@mapIndexedNotNull null
+            val archiveDays = s.str("tv_archive_duration")?.toIntOrNull()?.takeIf { it > 0 }
+            val catchup = if (s.str("tv_archive") == "1" && archiveDays != null) {
+                CatchupInfo(type = "xtream", source = null, days = archiveDays)
+            } else {
+                null
+            }
+            LiveChannel(
+                key = source.id + ":xtream:" + stableId("xtream|$id"),
+                sourceId = source.id,
+                sourceName = source.name,
+                name = s.str("name") ?: "Channel $id",
+                tvgId = s.str("epg_channel_id"),
+                tvgName = null,
+                logo = s.str("stream_icon"),
+                group = s.str("category_id")?.let(categories::get) ?: "Other",
+                number = s.str("num")?.toIntOrNull() ?: index + 1,
+                url = "$base/live/${encoded(source.username)}/${encoded(source.password)}/$id.$extension",
+                headers = emptyMap(),
+                catchup = catchup,
                 drm = null,
             )
         }

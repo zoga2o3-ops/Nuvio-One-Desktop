@@ -56,6 +56,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -87,6 +88,7 @@ import com.nuvio.app.core.ui.toggleFullscreenAction
 import com.nuvio.app.features.player.desktop.isDesktopAppFullscreen
 import com.nuvio.app.features.player.PlatformPlayerSurface
 import com.nuvio.app.features.player.PlayerControlsState
+import com.nuvio.app.features.player.PlayerEngineController
 import com.nuvio.app.features.player.PlayerResizeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -148,6 +150,7 @@ internal fun IptvDesktopScreen(
     var editingSource by remember { mutableStateOf<IptvSource?>(null) }
     var sourceSaveError by remember { mutableStateOf<String?>(null) }
     var playing by remember { mutableStateOf<PlaybackTarget?>(null) }
+    var playerController by remember { mutableStateOf<PlayerEngineController?>(null) }
     // Multiview: up to four channels at once, shown in place of the single player.
     // Four slots, one per tile; an empty slot is a tile with no channel yet.
     var multiview by remember { mutableStateOf<List<PlaybackTarget?>?>(null) }
@@ -161,6 +164,18 @@ internal fun IptvDesktopScreen(
     var showRecordingSettings by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableStateOf<IptvRecordingExport.Progress?>(null) }
     var exportTitle by remember { mutableStateOf<String?>(null) }
+
+    // A recording made from the player's own connection must hand over to the downloader when
+    // playback changes or the screen closes, so it is never cut off by the player stopping.
+    LaunchedEffect(playing?.url) {
+        IptvRecorder.onPlaybackChanged(playing?.url)
+    }
+    LaunchedEffect(playerController) {
+        IptvRecorder.onPlayerControllerChanged(playerController)
+    }
+    DisposableEffect(Unit) {
+        onDispose { IptvRecorder.onScreenClosed() }
+    }
 
     /** Reads the share's recording folders (the TV's and the phone's layouts). */
     fun scanShare() {
@@ -534,6 +549,39 @@ internal fun IptvDesktopScreen(
         }
     }
 
+    fun startRecording(channel: LiveChannel, url: String) {
+        // Recording a channel that is already playing uses the player's own connection. This
+        // matters on accounts that allow one connection: a second download would be closed by
+        // the provider after a couple of seconds.
+        val fromPlayer = playing?.url == url &&
+            IptvRecorder.startFromPlayer(
+                channel.name,
+                url,
+                channel.headers,
+                playerController,
+            )
+        if (!fromPlayer) {
+            IptvRecorder.start(channel.name, url, channel.headers)
+        }
+    }
+
+    fun toggleRecording() {
+        if (IptvRecorder.recording) {
+            IptvRecorder.stop()
+            recordings = IptvRecorder.recordings()
+            return
+        }
+        val channel = selected ?: return
+        if (StalkerLinks.isStalker(channel.url)) {
+            scope.launch {
+                val url = StalkerLinks.resolveOnIo(channel.url)
+                if (!StalkerLinks.isStalker(url)) startRecording(channel, url)
+            }
+        } else {
+            startRecording(channel, channel.url)
+        }
+    }
+
     fun playMovie(movie: VodItem) {
         selectedMovieKey = movie.key
         onDemand = true
@@ -588,9 +636,10 @@ internal fun IptvDesktopScreen(
                         "stretch" -> PlayerResizeMode.Stretch
                         else -> PlayerResizeMode.Fit
                     },
-                    onControllerReady = {},
+                    onControllerReady = { playerController = it },
                     onSnapshot = {},
                     onError = { message ->
+                        IptvRecorder.onPlaybackChanged(null)
                         if (settings.autoReconnect && !reconnecting) {
                             reconnecting = true
                             scope.launch {
@@ -652,14 +701,7 @@ internal fun IptvDesktopScreen(
                         )
                     },
                     recording = recording,
-                    onRecord = {
-                        if (recording) {
-                            IptvRecorder.stop()
-                            recordings = IptvRecorder.recordings()
-                        } else if (selected != null) {
-                            IptvRecorder.start(selected.name, selected.url, selected.headers)
-                        }
-                    },
+                    onRecord = { toggleRecording() },
                 )
 
                 "movies" -> IptvVodGridPane(
@@ -973,9 +1015,10 @@ internal fun IptvDesktopScreen(
                                         "stretch" -> PlayerResizeMode.Stretch
                                         else -> PlayerResizeMode.Fit
                                     },
-                                    onControllerReady = {},
+                                    onControllerReady = { playerController = it },
                                     onSnapshot = {},
                                     onError = { message ->
+                                        IptvRecorder.onPlaybackChanged(null)
                                         if (settings.autoReconnect && !reconnecting) {
                                             reconnecting = true
                                             scope.launch {
@@ -1081,28 +1124,7 @@ internal fun IptvDesktopScreen(
                                 selected != null -> play(selected)
                             }
                         },
-                        onRecord = {
-                            if (selected != null) {
-                                if (IptvRecorder.recording) {
-                                    IptvRecorder.stop()
-                                    recordings = IptvRecorder.recordings()
-                                } else {
-                                    val channel = selected
-                                    if (channel != null) {
-                                        scope.launch {
-                                            val url = if (StalkerLinks.isStalker(channel.url)) {
-                                                StalkerLinks.resolveOnIo(channel.url)
-                                            } else {
-                                                channel.url
-                                            }
-                                            if (!StalkerLinks.isStalker(url)) {
-                                                IptvRecorder.start(channel.name, url, channel.headers)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
+                        onRecord = { toggleRecording() },
                         onFavorite = {
                             if (selected != null) {
                                 persistFavorites(
@@ -1115,6 +1137,12 @@ internal fun IptvDesktopScreen(
                     )
 
                     playbackError?.let {
+                        Text(it, color = Color(0xFFFF8A9B), fontSize = 12.sp)
+                    }
+                    IptvRecorder.notice?.let {
+                        Text(it, color = Color(0xFFFFC66D), fontSize = 12.sp)
+                    }
+                    IptvRecorder.error?.let {
                         Text(it, color = Color(0xFFFF8A9B), fontSize = 12.sp)
                     }
 

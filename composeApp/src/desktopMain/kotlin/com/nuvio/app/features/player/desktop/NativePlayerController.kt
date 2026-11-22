@@ -485,6 +485,18 @@ internal class NativePlayerController(
         NativePlayerBridge.setStringProperty(current, "cache-pause", if (enabled) "no" else "yes")
     }
 
+    /**
+     * Records the stream mpv is playing right now to [path] (null stops). Uses the player's own
+     * provider connection, so a one-connection IPTV account can record while watching.
+     */
+    internal fun setStreamRecord(path: String?): Boolean {
+        val current = handle.takeIf { it != 0L } ?: return false
+        return runCatching {
+            NativePlayerBridge.setStringProperty(current, "stream-record", path.orEmpty())
+            true
+        }.getOrDefault(false)
+    }
+
     @Synchronized
     /** Loads another stream into this same player (the music video switch), keeping the window. */
     fun swapSource(sourceUrl: String, audioUrl: String, startMs: Long, playWhenReady: Boolean) {
