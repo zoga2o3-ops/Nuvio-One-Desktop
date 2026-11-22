@@ -129,7 +129,7 @@ internal object IptvRecorder {
                 delay(6_000)
                 if (token == generation && recording && playerRecorder === native) {
                     val size = runCatching { Files.size(file) }.getOrDefault(0L)
-                    if (size == 0L) {
+                    if (size < 16 * 1024L) {
                         synchronized(lock) {
                             if (token == generation && recording && playerRecorder === native) {
                                 detachPlayerToHttp("The player didn't record; recording from the stream instead.")
@@ -254,6 +254,11 @@ internal object IptvRecorder {
                             recordHls(finalUrl.ifBlank { startUrl }, headers, output, token)
                             return
                         }
+                        if (contentType.contains("text/html") || contentType.contains("application/json")) {
+                            error = "The provider returned a web page instead of the channel. " +
+                                "Check that the channel plays and that your account allows another connection."
+                            return
+                        }
 
                         val input = BufferedInputStream(conn.inputStream)
                         try {
@@ -265,6 +270,11 @@ internal object IptvRecorder {
                                     append(input.readBytes().toString(StandardCharsets.UTF_8))
                                 }
                                 recordHls(finalUrl.ifBlank { startUrl }, headers, output, token, text)
+                                return
+                            }
+                            if (read > 0 && looksLikeWebPage(buffer, read)) {
+                                error = "The provider returned a web page instead of the channel. " +
+                                    "Check that the channel plays and that your account allows another connection."
                                 return
                             }
 
@@ -376,7 +386,7 @@ internal object IptvRecorder {
 
             for (segment in segments) {
                 if (!active(token)) return
-                if (!seen.add(segment.url)) continue
+                if (segment.url in seen) continue
                 val data = fetchSegment(segment.url, headers) ?: continue
                 val plain = if (segment.key != null) {
                     val keyBytes = hlsKey(segment.key.url, headers) ?: continue
@@ -389,6 +399,7 @@ internal object IptvRecorder {
                 }
                 output.write(plain)
                 output.flush()
+                seen += segment.url
                 if (notice != null) notice = null
             }
 
@@ -545,6 +556,14 @@ internal object IptvRecorder {
         val text = String(buffer, 0, count.coerceAtMost(4 * 1024), StandardCharsets.UTF_8)
             .trimStart('\uFEFF', ' ', '\t', '\r', '\n')
         return text.startsWith("#EXTM3U")
+    }
+
+    private fun looksLikeWebPage(buffer: ByteArray, count: Int): Boolean {
+        val text = String(buffer, 0, count.coerceAtMost(4 * 1024), StandardCharsets.UTF_8)
+            .trimStart('\uFEFF', ' ', '\t', '\r', '\n')
+            .lowercase(Locale.ROOT)
+        return text.startsWith("<!doctype") || text.startsWith("<html") ||
+            (text.startsWith("{") && ("\"error\"" in text || "\"message\"" in text))
     }
 
     private fun unwrap(controller: PlayerEngineController?): NativePlayerController? {
